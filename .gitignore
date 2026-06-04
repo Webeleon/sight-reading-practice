@@ -1,7 +1,9 @@
 node_modules
 dist
+dist-electron/
 out/
 *.sqlite
 .vite
 coverage
 *.tsbuildinfo
+.DS_Store

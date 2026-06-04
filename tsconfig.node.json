@@ -1,4 +1,12 @@
 {
+  // Node/Electron-main layer: Node built-ins + Electron's own bundled types. Electron's
+  // type defs (node_modules/electron/electron.d.ts) resolve via the `electron` import
+  // specifier under Bundler resolution; "electron" in `types` would NOT work (it has no
+  // top-level ambient triple-slash), so types are pulled in through the imports instead.
+  //
+  // electron.vite.config.ts is intentionally NOT included here: it relies on the
+  // `__dirname` global that electron-vite's own config loader injects (unavailable under
+  // ESM typecheck), and electron-vite type-checks/transpiles it itself at build time.
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
     "lib": ["ES2022"],
@@ -6,6 +14,7 @@
   },
   "include": [
     "src/cli",
-    "src/persistence"
+    "src/persistence",
+    "electron"
   ]
 }

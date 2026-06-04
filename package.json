@@ -4,7 +4,11 @@
   "private": true,
   "type": "module",
   "description": "Throwaway Electron+TypeScript prototype for a guitar sight-reading practice tool",
+  "main": "dist-electron/main/main.mjs",
   "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
     "test": "vitest run",
     "verify": "vitest run && npm run verify:property && npm run typecheck && npm run verify:purity",
     "typecheck": "tsc -p tsconfig.pure.json --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.ui.json --noEmit",
@@ -14,13 +18,18 @@
   },
   "dependencies": {
     "opensheetmusicdisplay": "^1.9.9",
+    "react": "^19.2.7",
+    "react-dom": "^19.2.7",
     "seedrandom": "^3.0.5"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
+    "@types/react": "^19.2.16",
+    "@types/react-dom": "^19.2.3",
     "@types/seedrandom": "^3.0.8",
     "@vitejs/plugin-react": "^6.0.2",
     "@vitest/coverage-v8": "^4.1.8",
+    "electron": "^42.3.3",
     "electron-vite": "^5.0.0",
     "happy-dom": "^20.10.1",
     "tsx": "^4.22.4",

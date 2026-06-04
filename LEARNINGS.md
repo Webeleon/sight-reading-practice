@@ -828,3 +828,244 @@ musicality knob (`STEP_LEAP_TOLERANCE`, `CONTOUR_WORKING_RANGE_SEMITONES`,
 Deterministic. Re-running the three CLI commands in `out/audition/README.md` with the same
 flags+seeds reproduces byte-identical files and telemetry. Regenerate fallbacks first if
 the generator changed: `npx tsx scripts/authorFallbacks.ts`.
+
+## Milestone 3 — Electron shell (electron-vite scaffold)
+
+### Versions installed at this milestone (2026-06)
+
+- electron 42.3.3 (bundled Chromium reported as Electron `v24.15.0` from the binary's own
+  `--version`, which is the internal node-style stamp — the npm package version 42.x is the
+  one that matters). React 19.2.x + react-dom 19.2.x, @types/react 19.2.x.
+- electron-vite 5.0.x, vite 8.0.x, @vitejs/plugin-react 6.0.x (already present from scaffold).
+- Node v24.13.0 host. The scaffold-era vite/electron-vite peer mismatch (see Scaffold
+  section, handled with `legacy-peer-deps=true` in `.npmrc`) did NOT bite at build time —
+  electron-vite 5 + vite 8 build all three targets cleanly. The `.npmrc` flag is still
+  required for `npm install` to proceed past the peer-range complaint.
+
+### The electron postinstall binary download is blocked in the sandbox
+
+`npm install electron` records the package but its `postinstall` (`install.js`, which
+downloads the ~100MB platform binary) is a no-op / silently skipped under the network
+sandbox — `node_modules/electron/` ends up WITHOUT `dist/` or `path.txt`. Fix: run
+`node node_modules/electron/install.js` once with network access; it then unpacks
+`dist/Electron.app`. Verify with `cat node_modules/electron/path.txt` (should print
+`Electron.app/Contents/MacOS/Electron`). Without this, `electron-vite dev`/`preview` and
+launching the app fail with "Electron binary not found".
+
+### electron-vite config gotchas (this project is `"type": "module"`)
+
+- **Three targets, distinct outDir.** Default electron-vite outDir is `out/`, which here
+  already holds Milestone 2 batch MusicXML. Pointed the build at `dist-electron/`
+  (main/preload/renderer subdirs) to avoid clobbering it; added `dist-electron/` to
+  `.gitignore` (the existing `dist` line does NOT match `dist-electron`).
+- **ESM format MUST be explicit on main + preload.** Because `package.json` is
+  `"type": "module"`, setting `rollupOptions.output.entryFileNames: '[name].mjs'` WITHOUT
+  also setting `output.format: 'es'` fails with: *"The electron vite main config output
+  format must be 'cjs' or 'es'."* electron-vite couldn't infer the format from the custom
+  filename alone. Fix: set `output: { format: 'es', entryFileNames: '[name].mjs' }` on
+  both `main` and `preload`.
+- **ESM preload must be unsandboxed.** ESM (`.mjs`) preloads require
+  `webPreferences.sandbox: false` (Electron docs: ESM preload + sandbox are incompatible).
+  contextIsolation stays ON; the preload still only exposes a tiny read-only object via
+  `contextBridge`, so this is not a meaningful security loss for a local prototype.
+- **`__dirname` in the config file is electron-vite-injected, not real ESM.** The
+  `electron.vite.config.ts` uses `__dirname` (electron-vite's config loader provides it).
+  That makes the config file fail a plain ESM `tsc` typecheck, so it is deliberately
+  EXCLUDED from `tsconfig.node.json`'s `include` (electron-vite type-checks/transpiles it
+  itself). The actual `electron/main.ts` uses the ESM-correct
+  `dirname(fileURLToPath(import.meta.url))` instead.
+
+### Layout chosen (brief section 5)
+
+```
+electron/main.ts      -> dist-electron/main/main.mjs       (BrowserWindow, loads renderer)
+electron/preload.ts   -> dist-electron/preload/preload.mjs (contextBridge: window.sightReading)
+src/ui/index.html     -> dist-electron/renderer/index.html (renderer root)
+src/ui/main.tsx       -> ReactDOM.createRoot mount
+src/ui/App.tsx        -> <App/> placeholder heading
+src/ui/styles.css     -> minimal dark functional CSS
+src/ui/env.d.ts       -> `declare module '*.css'` so CSS side-effect imports typecheck
+```
+
+`package.json` `"main": "dist-electron/main/main.mjs"` is what `electron .` runs. In dev,
+electron-vite injects `ELECTRON_RENDERER_URL` (the vite dev server) and `main.ts` loads it
++ opens devtools; in prod it `loadFile`s the built `../renderer/index.html` relative to the
+main bundle's dir. Those relative `../preload` and `../renderer` paths line up with the
+`dist-electron/{main,preload,renderer}` layout.
+
+### tsconfig wiring for the new layers
+
+- `tsconfig.node.json`: added `electron/` to `include`. Electron's own types resolve via
+  the `import { app } from 'electron'` specifier under Bundler resolution — you do NOT (and
+  cannot) list `"electron"` in `compilerOptions.types`; it has no top-level ambient module
+  to load that way.
+- `tsconfig.ui.json`: added `"jsx": "react-jsx"` (automatic runtime). React types resolve
+  through the `react`/`react-dom` imports. Did NOT add `node` to the renderer `types` —
+  the renderer is browser context; DOM lib covers `document`/`window`/`console`.
+- `tsconfig.pure.json` untouched (no DOM) — purity wall intact; `npm run verify` stayed
+  fully green (249 unit tests + 1,000-line property + 3-config typecheck + purity grep).
+
+### Build / launch verification
+
+- `npm run build` (electron-vite build) succeeds: `main.mjs` 3.4kB, `preload.mjs` 2.5kB,
+  renderer `index.html` + assets (the renderer JS chunk is ~488kB — React 19 dev-ish
+  bundle; fine for a throwaway, not optimizing chunk size).
+- Launched the built app (`electron .`); the process stays alive past window creation and
+  renderer load with no crash (a bad preload path or main-process throw would exit
+  immediately). NOTE: main-process `console.log` (`[MAIN]` lines) does NOT surface to the
+  launching terminal's stdout on macOS when started via `electron .` / the binary directly
+  — Electron routes it elsewhere. For Milestone 3's cursor-timing measurements, log from
+  the RENDERER (devtools console) or pipe metrics over IPC, don't rely on main stdout.
+
+## Milestone 3 — musical-time model & sample-accurate metronome
+
+### The two-clock split (`src/audio/musicalTime.ts` pure, `src/audio/metronome.ts` Web Audio)
+
+- Kept the MATH pure and the SOUND impure, in two files. `musicalTime.ts` imports only
+  pure domain (`TICKS_PER_QUARTER`, `ticksPerBar`, `pitchToMidi`) — zero Web Audio / DOM —
+  so it runs under the vitest *node* env and is the deterministic basis of the brief's
+  "+/-20ms at the final downbeat" criterion. `metronome.ts` is the only file that touches
+  `AudioContext`. Both files live under `tsconfig.ui.json` (DOM + WebWorker libs); the
+  purity grep does NOT scan `src/audio`, so `musicalTime.ts` purity is by discipline, not
+  enforced — keep it that way (it's a candidate to move into a pure dir later if wanted).
+
+### tick -> ms conversion (the exact-timing core)
+
+- `tickToMs(tick, bpm) = (tick / 480) * (60000 / bpm)`. Quarter (480t) = 500ms @120,
+  1000ms @60, 600ms @100 — all exact (no float drift in the test tolerances). Worked
+  example confirmed: 4-bar 4/4 line @120 = 8000ms content; 2-bar count-in @120 = 4000ms;
+  the final-bar downbeat (note index 12, tick 5760) lands at 4000 + 6000 = **10000ms**
+  wall-clock, and the timeline END is 4000 + 8000 = **12000ms**. These are asserted to
+  6+ decimal places, so the only thing that can push the live cursor past +/-20ms is real
+  audio-clock jitter, which Gate 2 measures.
+
+- BPM convention: a "beat" == a quarter note in /4 meters (`60000/bpm` ms per beat). For
+  metronome click spacing I derived beat duration as `barDurationMs / timeSignature.beats`
+  so the click grid is ALWAYS internally consistent with `ticksPerBar` even for 3/4 and
+  6/8. Caveat for later: 6/8 here clicks 6 eighths per bar (notated beats), not 2 dotted-
+  quarter felt beats — fine for a metronome, revisit if the human wants compound-meter feel.
+
+### Count-in & schedule
+
+- `precomputeSchedule(line, bpm, countInBars=2)` returns one flat `ScheduleEntry[]`
+  (`{noteIndex, onsetMs, durationMs, expectedMidi|null}`) PLUS `countInOffsetMs`,
+  `lineDurationMs`, `totalDurationMs`, and the click track. All wall-clock times are from
+  t=0 == the first count-in click, so the cursor and metronome share ONE origin. Rests are
+  `expectedMidi: null` (carried through, not dropped — evaluation needs the slot).
+
+- `currentNoteIndexAt(schedule, elapsedMs)` is a binary search over onsets: returns **-1**
+  during the count-in (cursor parked/hidden), the active note index during the line, and
+  stays on the LAST index forever after the end (so the results screen highlights the final
+  note). O(log n) — cheap to call every animation frame.
+
+### Metronome scheduling discipline ("A Tale of Two Clocks")
+
+- A coarse `setInterval` (SCHEDULER_INTERVAL_MS = 25ms) is used ONLY to wake up and
+  schedule; it never makes sound. Each wake-up schedules every click whose time falls in
+  `[now, now + LOOKAHEAD_MS]` (LOOKAHEAD_MS = 100ms, comfortably > the 25ms tick so no
+  click is ever missed between wake-ups) via `oscillator.start(when)` at an absolute audio-
+  clock time. The AUDIO clock — not the timer cadence — decides when sound plays, so timer
+  jitter / GC pauses don't smear the beat. Clamp `when` to `currentTime` as a guard so a
+  long pause can't try to schedule in the past.
+- t=0 is anchored at `ctx.currentTime + 0.1s` on `start()` so the very first click is still
+  schedulable (you can't schedule exactly "now").
+- `elapsedMs()` is derived from the audio clock: `(ctx.currentTime - startAudioTime)*1000`.
+  The cursor reads this via the `onTick` callback (fired each scheduling wake-up) — the
+  metronome is authoritative and NEVER waits for the user; `onFinished` fires once when
+  `elapsedMs >= totalDurationMs`.
+- Subdivision > 1 inserts (subdivision-1) UNACCENTED clicks between beats; only true bar
+  downbeats are accented (1500Hz/louder vs 1000Hz). Accents = one per bar (count-in + line).
+
+### Testability win
+
+- Made the metronome injectable: it takes an `AudioClock` interface (the slice of
+  AudioContext it uses) plus optional `setIntervalFn`/`clearIntervalFn`. Tests drive a fake
+  clock + fake timer under the node env and assert clicks are scheduled AHEAD at the right
+  absolute times, accents land on downbeats, elapsed/current-click come from the audio
+  clock, and `onFinished` fires exactly once. No real Web Audio needed for CI; live jitter
+  is the only thing left to measure at Gate 2.
+
+- `npm run verify` stayed fully green after this milestone: 281 unit tests (was 249; +32
+  audio) + 1,000-line property + 3-config typecheck (pure/node/ui) + purity grep.
+
+## Milestone 3 — renderer UI: OSMD render + metronome-driven cursor + count-in + Next line
+
+The renderer wires `generateLine` → `serializeLineToMusicXML` → OSMD render, then drives
+OSMD's built-in cursor in MUSICAL TIME off the metronome's audio clock. Files added:
+`src/ui/components/OsmdView.tsx` (render + cursor host, imperative `CursorHandle`),
+`src/ui/useReadAlong.ts` (the rAF cursor loop), `src/ui/lineConfig.ts` (UI defaults +
+fresh-seed line generation), `src/ui/components/ConfigPanel.tsx`, `.../TimingReadout.tsx`,
+and a rewritten `src/ui/App.tsx`. `npm run build` (electron-vite) bundles the renderer
+clean (2.2MB JS — OSMD dominates); `npm run verify` stayed green (281 tests + property +
+typecheck + purity). Verified live in a real Chromium tab via the built bundle + Playwright.
+
+### OSMD integration quirks (the load-bearing ones)
+
+- **Cursor model maps 1:1 to `line.notes` for a single-voice line.** OSMD's cursor walks
+  "voice entries" in score order; our serializer emits exactly one voice entry per LineNote
+  (rests included), so the cursor's k-th `next()` step == `line.notes[k]`. We do NOT trust
+  this blindly: on each render we walk the cursor to `EndReached`, COUNT the entries, reset,
+  and assert `count === line.notes.length` (logs "cursor mapping OK (N entries == N notes)"
+  or warns + clamps). Across many generated lines (8, 11, 15 notes; eighths, dotted figures,
+  triplets) the count always matched. If chords/ties were ever introduced this assert would
+  catch the mapping drift immediately — keep it.
+- **Drive the cursor by INDEX, not by stepping per frame.** The `CursorHandle.moveTo(target)`
+  steps `next()` forward to reach a target index (and `reset()`+forward if going backward,
+  which only happens on replay). It's idempotent/cheap when already there, so the 60fps rAF
+  loop just calls `moveTo(currentNoteIndexAt(schedule, elapsedMs))` every frame. OSMD geometry
+  is never re-queried per frame — the cursor position is a pure function of the audio clock.
+- **OSMD constructor options that matter:** `{ backend: 'svg', drawTitle: false,
+  drawPartNames: false, autoResize: true, followCursor: true, cursorsOptions: [{ type: 0,
+  color: '#4f9cff', alpha: 0.45, follow: true }] }`. `type: 0` (Standard) highlights the
+  current note as a translucent box — reads well at a distance. `cursor.show()/hide()` must
+  be called AFTER `render()` and after `cursor.reset()` (which also re-inits the iterator).
+- **`osmd.load()` is async (returns a Promise); `render()` is sync.** Always
+  `await load(xml).then(() => { render(); /* init cursor */ })`. Re-rendering a new line just
+  calls `load`+`render` again on the same OSMD instance — no teardown needed (OSMD has no
+  full dispose; we just drop the ref and clear the container div on unmount).
+- **CSP:** the renderer's `img-src 'self' data:` and `style-src 'unsafe-inline'` already
+  cover OSMD (its SVG backend uses inline styles; the cursor element is a data/SVG element).
+  No CSP loosening was needed. (Only console noise was a harmless `favicon.ico` 404.)
+- **Staff background:** OSMD draws dark notation; the app theme is dark. Put a light panel
+  (`#f6f7f9`) behind the `.osmd-container` so the staff reads — otherwise it's invisible.
+
+### MEASURED cursor/metronome deviation (Gate-2 evidence, ±20ms criterion)
+
+Measured live in Chromium (44.1kHz AudioContext), 4-bar line @ 120 BPM, 2-bar count-in
+(total timeline 12000ms, line content starts at 4000ms):
+
+- **HEADLINE NUMBER — final-downbeat deviation: +6.5 ms → PASS.** The brief's criterion is
+  "the cursor reaches the final downbeat within ±20ms of the expected wall-clock time." The
+  final downbeat (start of the last line bar) is expected at 10000ms; the rAF loop latched
+  the first frame at/after it at elapsed=10006.5ms → +6.5ms. PASS with margin.
+- **Per-new-note cursor lag is tight: ~1–10 ms.** Logging current note index vs expected
+  onset at each beat, every time a NEW note became current the lag was 0.7, 1.0, 1.8, 2.2,
+  2.6, 3.8, 4.1, 4.9, 5.3, 6.5 ms etc. The cursor is as tight as the audio clock + one rAF
+  frame (~16ms worst case). (The big "lag" numbers in the raw log — 500ms, 1000ms — are an
+  artifact of the per-BEAT log sampling a long note that's still current several beats after
+  its own onset; they are NOT cursor error. Read only the rows where `noteIndex` changes.)
+- **MEASUREMENT GOTCHA worth carrying to Swift:** do NOT measure the criterion at the
+  metronome's `onFinished` (end of the whole timeline). `onFinished` fires from the ~25ms
+  lookahead-scheduler poll, so it is POLLING-GRANULAR — it consistently reported ~+20.8ms
+  (right at/over the threshold) purely from the 25ms wake-up granularity AFTER the timeline
+  ended, not from clock drift. Measuring at the final DOWNBEAT in the 60fps rAF loop (which
+  reads the audio clock directly) gives the true, tight number (+6.5ms). The end-of-timeline
+  number is logged as SECONDARY/"polling-granular" only. Lesson: measure the criterion event
+  at rAF/audio-clock resolution, never at the scheduler-tick resolution.
+
+### Count-in, transport, and the seeded-PRNG exemption
+
+- Count-in is 2 bars (DEFAULT_COUNT_IN_BARS) of metronome clicks before the cursor appears;
+  the cursor stays hidden while `elapsedMs < countInOffsetMs` (`currentNoteIndexAt` returns
+  -1 there) and the readout shows "Count-in k / N" (derived from the count-in click times).
+- "Next line" / Start are keyboard-shortcutable (Enter = Next line, Space = Start), guarded
+  to ignore keystrokes while focused in the config `<input>/<select>`.
+- The UI layer is the ONE place exempt from the seeded-PRNG / clock-free rule
+  (`src/ui/lineConfig.ts`): it picks a fresh `Math.random()` seed per line and reads
+  `new Date().toISOString()` for `generatedAt`, then INJECTS both into `generateLine`. The
+  generator stays deterministic; purity grep only bans `Math.random` in
+  generator/content, so this is clean. Saw a real fallback-free + a 2-attempt generation in
+  the wild (telemetry: `attempts=1`/`attempts=2`, `fallback=false`) — generator healthy.
+- AudioContext is created lazily and `resume()`d on the Start gesture (browser autoplay
+  policy), stashed on `window` so repeated Start/Next don't leak contexts.
+

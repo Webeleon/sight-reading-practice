@@ -1,7 +1,11 @@
 {
+  // Renderer (React) + Web Audio layer: DOM libs + React types. `react-jsx` lets .tsx
+  // compile with the automatic JSX runtime. `@types/react` / `@types/react-dom` resolve
+  // through the react / react-dom imports under Bundler resolution.
   "extends": "./tsconfig.base.json",
   "compilerOptions": {
-    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"]
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+    "jsx": "react-jsx"
   },
   "include": [
     "src/ui",
