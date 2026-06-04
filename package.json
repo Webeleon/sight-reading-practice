@@ -1,0 +1,30 @@
+{
+  "name": "sight-reading-guitar-practice",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Throwaway Electron+TypeScript prototype for a guitar sight-reading practice tool",
+  "scripts": {
+    "test": "vitest run",
+    "verify": "vitest run && npm run verify:purity",
+    "verify:purity": "bash scripts/check-purity.sh",
+    "verify:property": "echo 'property test added in M2 (stub)'",
+    "generate:batch": "node --import tsx src/cli/generateBatch.ts"
+  },
+  "dependencies": {
+    "opensheetmusicdisplay": "^1.9.9",
+    "seedrandom": "^3.0.5"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.1",
+    "@types/seedrandom": "^3.0.8",
+    "@vitejs/plugin-react": "^6.0.2",
+    "@vitest/coverage-v8": "^4.1.8",
+    "electron-vite": "^5.0.0",
+    "happy-dom": "^20.10.1",
+    "tsx": "^4.22.4",
+    "typescript": "^6.0.3",
+    "vite": "^8.0.16",
+    "vitest": "^4.1.8"
+  }
+}
