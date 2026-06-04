@@ -7,3 +7,5 @@ out/
 coverage
 *.tsbuildinfo
 .DS_Store
+.playwright-mcp/
+m3-*.png

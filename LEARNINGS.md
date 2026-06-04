@@ -1069,3 +1069,25 @@ Measured live in Chromium (44.1kHz AudioContext), 4-bar line @ 120 BPM, 2-bar co
 - AudioContext is created lazily and `resume()`d on the Start gesture (browser autoplay
   policy), stashed on `window` so repeated Start/Next don't leak contexts.
 
+
+## Milestone 3 — GATE 2 live verification (orchestrator, headless Chromium)
+
+The M3 timing math was unit-verified, but the brief's "+/-20ms wall-clock" criterion
+needs a real AudioContext. The built renderer (dist-electron/renderer) is plain web
+tech (OSMD + Web Audio; the Electron bridge is guarded via `window.sightReading?`), so
+it was served statically and driven with Playwright in Chromium (same engine Electron
+embeds). Independent live results, one read-along run at the default config (C major,
+open position, 120 BPM):
+
+- OSMD rendered the auto-generated line on mount (1 SVG, 54 vector elements) — no runtime error (only a benign favicon 404).
+- Read-along ran to completion: Phase=Finished, Note=11/11 (cursor advanced through every note), Elapsed=12253ms (2-bar count-in 4000ms + ~8000ms line).
+- **Final downbeat deviation = +0.7 ms (PASS <= 20ms)** — measured live against the real audio clock, corroborating the exact precomputed-schedule math. (A builder run earlier logged +6.5ms; both pass comfortably.)
+- "Next line" regenerated and re-rendered a different line (SVG 54 -> 64 vector elements).
+
+Swift note: Core Audio will have *lower* latency than Web Audio, so the +/-20ms budget
+is comfortable on both platforms; the authoritative-clock + lookahead-scheduling design
+transfers directly.
+
+Minor rough edge (left as-is per "functional/ugly is correct"): after "Next line", the
+TimingReadout still shows the previous run's "Finished / deviation" until Start is
+pressed again, rather than resetting to Idle. Cosmetic only.
