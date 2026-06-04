@@ -1,8 +1,17 @@
 {
-  "files": [],
-  "references": [
-    { "path": "./tsconfig.pure.json" },
-    { "path": "./tsconfig.node.json" },
-    { "path": "./tsconfig.ui.json" }
-  ]
+  // Editor/default project: a single inclusive config so the TS language server
+  // resolves every open file (Bundler resolution, .js->.ts specifiers) without
+  // falling back to inferred defaults. Includes DOM + node libs so ui/audio/cli
+  // files resolve too.
+  //
+  // Strict per-layer enforcement (no-DOM purity for src/domain etc.) is NOT done
+  // here — it runs in `npm run verify` via `npm run typecheck` against
+  // tsconfig.pure.json / tsconfig.node.json / tsconfig.ui.json plus the
+  // scripts/check-purity.sh grep guard.
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable", "WebWorker"],
+    "types": ["node"]
+  },
+  "include": ["src"]
 }

@@ -8,7 +8,7 @@ import {
   pitchToMidi,
   pitchClass,
 } from '../domain/index.js';
-import type { Key, Line } from '../domain/index.js';
+import type { Key } from '../domain/index.js';
 import { isPlayableInPosition } from '../fretboard/index.js';
 
 const FIXED_AT = '2026-06-04T12:00:00.000Z';

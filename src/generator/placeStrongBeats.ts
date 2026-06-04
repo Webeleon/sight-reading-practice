@@ -116,7 +116,7 @@ export function placeStrongBeatPitches(
   contour: ContourTarget,
   cadence: CadencePatternEntry,
   context: GenerationContext,
-  ticksPerBar: number,
+  _ticksPerBar: number,
   rng: Rng,
 ): StrongBeatPitches {
   const result: StrongBeatPitches = new Map();

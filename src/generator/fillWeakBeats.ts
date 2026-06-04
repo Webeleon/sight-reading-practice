@@ -10,7 +10,6 @@
 //
 // Pure module: no electron/react/DOM, seeded-PRNG only, no `any`.
 
-import type { Pitch } from '../domain/index.js';
 import { chordTones, pitchClass, pitchToMidi } from '../domain/index.js';
 import type { ConcreteProgression } from '../domain/index.js';
 import type { GenerationContext, PlayableNote } from './context.js';
