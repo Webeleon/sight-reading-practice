@@ -1,0 +1,215 @@
+{
+  "_meta": {
+    "status": "PLACEHOLDER",
+    "note": "Minimal valid starter content authored by the build agent. Musical quality and breadth are the human's responsibility to refine later. These exist to make the generator run end-to-end. See brief section 8.",
+    "schemaVersion": 1,
+    "ticksPerQuarter": 480,
+    "conventions": "romanNumeral is key-agnostic; quality is the explicit TriadQuality|SeventhQuality used to instantiate the chord. startTick 0 = downbeat of that bar. barIndex is 0-based."
+  },
+  "progressions": [
+    {
+      "id": "I-IV-V-I",
+      "name": "I-IV-V-I (classic authentic)",
+      "difficulty": 1,
+      "barCount": 4,
+      "chords": [
+        { "romanNumeral": "I", "quality": "major", "barIndex": 0, "startTick": 0 },
+        { "romanNumeral": "IV", "quality": "major", "barIndex": 1, "startTick": 0 },
+        { "romanNumeral": "V", "quality": "major", "barIndex": 2, "startTick": 0 },
+        { "romanNumeral": "I", "quality": "major", "barIndex": 3, "startTick": 0 }
+      ],
+      "tags": ["diatonic", "functional", "cadential"],
+      "applicableKeys": "all"
+    },
+    {
+      "id": "I-vi-IV-V",
+      "name": "I-vi-IV-V (doo-wop / 50s)",
+      "difficulty": 1,
+      "barCount": 4,
+      "chords": [
+        { "romanNumeral": "I", "quality": "major", "barIndex": 0, "startTick": 0 },
+        { "romanNumeral": "vi", "quality": "minor", "barIndex": 1, "startTick": 0 },
+        { "romanNumeral": "IV", "quality": "major", "barIndex": 2, "startTick": 0 },
+        { "romanNumeral": "V", "quality": "major", "barIndex": 3, "startTick": 0 }
+      ],
+      "tags": ["diatonic", "functional", "pop"],
+      "applicableKeys": "all"
+    },
+    {
+      "id": "I-V-vi-IV",
+      "name": "I-V-vi-IV (pop axis)",
+      "difficulty": 1,
+      "barCount": 4,
+      "chords": [
+        { "romanNumeral": "I", "quality": "major", "barIndex": 0, "startTick": 0 },
+        { "romanNumeral": "V", "quality": "major", "barIndex": 1, "startTick": 0 },
+        { "romanNumeral": "vi", "quality": "minor", "barIndex": 2, "startTick": 0 },
+        { "romanNumeral": "IV", "quality": "major", "barIndex": 3, "startTick": 0 }
+      ],
+      "tags": ["diatonic", "functional", "pop"],
+      "applicableKeys": "all"
+    },
+    {
+      "id": "ii-V-I",
+      "name": "ii-V-I (2-bar major cadence)",
+      "difficulty": 2,
+      "barCount": 2,
+      "chords": [
+        { "romanNumeral": "ii", "quality": "minor", "barIndex": 0, "startTick": 0 },
+        { "romanNumeral": "V", "quality": "major", "barIndex": 0, "startTick": 960 },
+        { "romanNumeral": "I", "quality": "major", "barIndex": 1, "startTick": 0 }
+      ],
+      "tags": ["diatonic", "functional", "cadential"],
+      "applicableKeys": "all"
+    },
+    {
+      "id": "ii7-V7-Imaj7",
+      "name": "ii7-V7-Imaj7 (jazz 2-5-1)",
+      "difficulty": 3,
+      "barCount": 2,
+      "chords": [
+        { "romanNumeral": "ii", "quality": "minor7", "barIndex": 0, "startTick": 0 },
+        { "romanNumeral": "V", "quality": "dominant7", "barIndex": 0, "startTick": 960 },
+        { "romanNumeral": "I", "quality": "major7", "barIndex": 1, "startTick": 0 }
+      ],
+      "tags": ["diatonic", "jazz", "seventh", "cadential"],
+      "applicableKeys": "all"
+    },
+    {
+      "id": "I-vi-ii-V",
+      "name": "I-vi-ii-V (turnaround)",
+      "difficulty": 2,
+      "barCount": 4,
+      "chords": [
+        { "romanNumeral": "I", "quality": "major", "barIndex": 0, "startTick": 0 },
+        { "romanNumeral": "vi", "quality": "minor", "barIndex": 1, "startTick": 0 },
+        { "romanNumeral": "ii", "quality": "minor", "barIndex": 2, "startTick": 0 },
+        { "romanNumeral": "V", "quality": "major", "barIndex": 3, "startTick": 0 }
+      ],
+      "tags": ["diatonic", "functional", "turnaround"],
+      "applicableKeys": "all"
+    },
+    {
+      "id": "Imaj7-vi7-ii7-V7",
+      "name": "Imaj7-vi7-ii7-V7 (jazz turnaround)",
+      "difficulty": 3,
+      "barCount": 4,
+      "chords": [
+        { "romanNumeral": "I", "quality": "major7", "barIndex": 0, "startTick": 0 },
+        { "romanNumeral": "vi", "quality": "minor7", "barIndex": 1, "startTick": 0 },
+        { "romanNumeral": "ii", "quality": "minor7", "barIndex": 2, "startTick": 0 },
+        { "romanNumeral": "V", "quality": "dominant7", "barIndex": 3, "startTick": 0 }
+      ],
+      "tags": ["diatonic", "jazz", "seventh", "turnaround"],
+      "applicableKeys": "all"
+    },
+    {
+      "id": "blues-4bar",
+      "name": "12-bar blues fragment (first 4 bars, I-IV-I-I)",
+      "difficulty": 2,
+      "barCount": 4,
+      "chords": [
+        { "romanNumeral": "I", "quality": "dominant7", "barIndex": 0, "startTick": 0 },
+        { "romanNumeral": "IV", "quality": "dominant7", "barIndex": 1, "startTick": 0 },
+        { "romanNumeral": "I", "quality": "dominant7", "barIndex": 2, "startTick": 0 },
+        { "romanNumeral": "I", "quality": "dominant7", "barIndex": 3, "startTick": 0 }
+      ],
+      "tags": ["blues", "seventh", "dominant"],
+      "applicableKeys": "all"
+    },
+    {
+      "id": "blues-turnaround-4bar",
+      "name": "Blues turnaround fragment (V-IV-I-V)",
+      "difficulty": 2,
+      "barCount": 4,
+      "chords": [
+        { "romanNumeral": "V", "quality": "dominant7", "barIndex": 0, "startTick": 0 },
+        { "romanNumeral": "IV", "quality": "dominant7", "barIndex": 1, "startTick": 0 },
+        { "romanNumeral": "I", "quality": "dominant7", "barIndex": 2, "startTick": 0 },
+        { "romanNumeral": "V", "quality": "dominant7", "barIndex": 3, "startTick": 0 }
+      ],
+      "tags": ["blues", "seventh", "dominant", "turnaround"],
+      "applicableKeys": "all"
+    },
+    {
+      "id": "I-IV",
+      "name": "I-IV (2-bar plagal motion)",
+      "difficulty": 1,
+      "barCount": 2,
+      "chords": [
+        { "romanNumeral": "I", "quality": "major", "barIndex": 0, "startTick": 0 },
+        { "romanNumeral": "IV", "quality": "major", "barIndex": 1, "startTick": 0 }
+      ],
+      "tags": ["diatonic", "functional", "plagal"],
+      "applicableKeys": "all"
+    },
+    {
+      "id": "I-V",
+      "name": "I-V (2-bar half-cadential)",
+      "difficulty": 1,
+      "barCount": 2,
+      "chords": [
+        { "romanNumeral": "I", "quality": "major", "barIndex": 0, "startTick": 0 },
+        { "romanNumeral": "V", "quality": "major", "barIndex": 1, "startTick": 0 }
+      ],
+      "tags": ["diatonic", "functional", "half-cadence"],
+      "applicableKeys": "all"
+    },
+    {
+      "id": "i-iv-V-i",
+      "name": "i-iv-V-i (minor authentic, harmonic minor V)",
+      "difficulty": 2,
+      "barCount": 4,
+      "chords": [
+        { "romanNumeral": "i", "quality": "minor", "barIndex": 0, "startTick": 0 },
+        { "romanNumeral": "iv", "quality": "minor", "barIndex": 1, "startTick": 0 },
+        { "romanNumeral": "V", "quality": "major", "barIndex": 2, "startTick": 0 },
+        { "romanNumeral": "i", "quality": "minor", "barIndex": 3, "startTick": 0 }
+      ],
+      "tags": ["diatonic", "minor", "functional", "cadential"],
+      "applicableKeys": "all"
+    },
+    {
+      "id": "i-VI-III-VII",
+      "name": "i-VI-III-VII (natural minor / Andalusian-ish)",
+      "difficulty": 2,
+      "barCount": 4,
+      "chords": [
+        { "romanNumeral": "i", "quality": "minor", "barIndex": 0, "startTick": 0 },
+        { "romanNumeral": "VI", "quality": "major", "barIndex": 1, "startTick": 0 },
+        { "romanNumeral": "III", "quality": "major", "barIndex": 2, "startTick": 0 },
+        { "romanNumeral": "VII", "quality": "major", "barIndex": 3, "startTick": 0 }
+      ],
+      "tags": ["diatonic", "minor", "modal"],
+      "applicableKeys": "all"
+    },
+    {
+      "id": "iio-V-i",
+      "name": "iio-V-i (minor 2-5-1)",
+      "difficulty": 3,
+      "barCount": 2,
+      "chords": [
+        { "romanNumeral": "ii", "quality": "diminished", "barIndex": 0, "startTick": 0 },
+        { "romanNumeral": "V", "quality": "major", "barIndex": 0, "startTick": 960 },
+        { "romanNumeral": "i", "quality": "minor", "barIndex": 1, "startTick": 0 }
+      ],
+      "tags": ["diatonic", "minor", "functional", "cadential"],
+      "applicableKeys": "all"
+    },
+    {
+      "id": "I-IV-V-I-8bar",
+      "name": "I-IV-V-I expanded (one chord every two beats... downbeats only)",
+      "difficulty": 1,
+      "barCount": 4,
+      "chords": [
+        { "romanNumeral": "I", "quality": "major", "barIndex": 0, "startTick": 0 },
+        { "romanNumeral": "I", "quality": "major", "barIndex": 1, "startTick": 0 },
+        { "romanNumeral": "IV", "quality": "major", "barIndex": 2, "startTick": 0 },
+        { "romanNumeral": "V", "quality": "major", "barIndex": 2, "startTick": 960 },
+        { "romanNumeral": "I", "quality": "major", "barIndex": 3, "startTick": 0 }
+      ],
+      "tags": ["diatonic", "functional"],
+      "applicableKeys": "all"
+    }
+  ]
+}

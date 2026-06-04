@@ -6,9 +6,9 @@
   "description": "Throwaway Electron+TypeScript prototype for a guitar sight-reading practice tool",
   "scripts": {
     "test": "vitest run",
-    "verify": "vitest run && npm run verify:purity",
+    "verify": "vitest run && npm run verify:property && npm run verify:purity",
     "verify:purity": "bash scripts/check-purity.sh",
-    "verify:property": "echo 'property test added in M2 (stub)'",
+    "verify:property": "vitest run src/generator/property.test.ts",
     "generate:batch": "node --import tsx src/cli/generateBatch.ts"
   },
   "dependencies": {

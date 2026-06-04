@@ -1,0 +1,41 @@
+{
+  "_meta": {
+    "PLACEHOLDER": true,
+    "note": "Starter/placeholder cadence content. Musical breadth and quality are the human's job to refine later. These are minimal-valid entries sufficient to exercise the generator pipeline end-to-end. See brief section 8 (cadences schema) and section 14.",
+    "schemaVersion": 1
+  },
+  "cadences": [
+    {
+      "id": "authentic_perfect",
+      "name": "Authentic (Perfect, leading-tone rise)",
+      "harmonicMovement": { "from": "V", "to": "I" },
+      "melodicResolution": { "from": "leadingTone", "to": "tonic", "motion": "stepUp" },
+      "constrainsPenultimate": true,
+      "difficulty": 1
+    },
+    {
+      "id": "authentic_via_supertonic",
+      "name": "Authentic via supertonic (2->1 descent)",
+      "harmonicMovement": { "from": "V", "to": "I" },
+      "melodicResolution": { "from": "supertonic", "to": "tonic", "motion": "stepDown" },
+      "constrainsPenultimate": true,
+      "difficulty": 2
+    },
+    {
+      "id": "half_cadence",
+      "name": "Half cadence (rest on the dominant)",
+      "harmonicMovement": { "from": "I", "to": "V" },
+      "melodicResolution": { "from": "mediant", "to": "dominant", "motion": "stepUp" },
+      "constrainsPenultimate": false,
+      "difficulty": 2
+    },
+    {
+      "id": "plagal",
+      "name": "Plagal (IV->I, the \"Amen\" cadence)",
+      "harmonicMovement": { "from": "IV", "to": "I" },
+      "melodicResolution": { "from": "submediant", "to": "dominant", "motion": "stepDown" },
+      "constrainsPenultimate": false,
+      "difficulty": 2
+    }
+  ]
+}

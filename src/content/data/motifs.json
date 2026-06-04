@@ -1,0 +1,244 @@
+{
+  "_meta": {
+    "PLACEHOLDER": true,
+    "note": "PLACEHOLDER starter rhythmic-motif library. Musical quality/breadth is the human's job to refine later (brief s8). Each entry's durations MUST sum to exactly ticksPerBar (1920 for 4/4); validated at load time by motifLibrary.loadMotifs and it fails loudly on violation. 480 ticks per quarter note.",
+    "timeSignature": "4/4",
+    "ticksPerBar": 1920,
+    "generatedBy": "Milestone 2 content authoring"
+  },
+  "motifs": [
+    {
+      "id": "straight-quarters",
+      "name": "Straight Quarters",
+      "timeSignature": "4/4",
+      "difficulty": 1,
+      "durations": [
+        { "base": "quarter", "dots": 0, "ticks": 480 },
+        { "base": "quarter", "dots": 0, "ticks": 480 },
+        { "base": "quarter", "dots": 0, "ticks": 480 },
+        { "base": "quarter", "dots": 0, "ticks": 480 }
+      ],
+      "rhythmVocabulary": ["straight", "quarters"]
+    },
+    {
+      "id": "straight-eighths",
+      "name": "Straight Eighths",
+      "timeSignature": "4/4",
+      "difficulty": 1,
+      "durations": [
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "eighth", "dots": 0, "ticks": 240 }
+      ],
+      "rhythmVocabulary": ["straight", "eighths"]
+    },
+    {
+      "id": "dotted-quarter-eighth-pairs",
+      "name": "Dotted Quarter + Eighth Pairs",
+      "timeSignature": "4/4",
+      "difficulty": 2,
+      "durations": [
+        { "base": "quarter", "dots": 1, "ticks": 720 },
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "quarter", "dots": 1, "ticks": 720 },
+        { "base": "eighth", "dots": 0, "ticks": 240 }
+      ],
+      "rhythmVocabulary": ["dotted"]
+    },
+    {
+      "id": "charleston",
+      "name": "Charleston",
+      "timeSignature": "4/4",
+      "difficulty": 3,
+      "durations": [
+        { "base": "quarter", "dots": 1, "ticks": 720 },
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "half", "dots": 0, "ticks": 960 }
+      ],
+      "rhythmVocabulary": ["dotted", "syncopated", "charleston"]
+    },
+    {
+      "id": "anticipation-syncopation",
+      "name": "Anticipation Syncopation",
+      "timeSignature": "4/4",
+      "difficulty": 3,
+      "durations": [
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "quarter", "dots": 0, "ticks": 480 },
+        { "base": "quarter", "dots": 0, "ticks": 480 },
+        { "base": "quarter", "dots": 0, "ticks": 480 },
+        { "base": "eighth", "dots": 0, "ticks": 240 }
+      ],
+      "rhythmVocabulary": ["syncopated", "eighths"]
+    },
+    {
+      "id": "offbeat-syncopation",
+      "name": "Offbeat Syncopation",
+      "timeSignature": "4/4",
+      "difficulty": 3,
+      "durations": [
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "quarter", "dots": 0, "ticks": 480 },
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "quarter", "dots": 0, "ticks": 480 }
+      ],
+      "rhythmVocabulary": ["syncopated", "eighths"]
+    },
+    {
+      "id": "eighth-quarter-eighth-sync",
+      "name": "Eighth-Quarter-Eighth Syncopation",
+      "timeSignature": "4/4",
+      "difficulty": 3,
+      "durations": [
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "quarter", "dots": 0, "ticks": 480 },
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "quarter", "dots": 0, "ticks": 480 },
+        { "base": "eighth", "dots": 0, "ticks": 240 }
+      ],
+      "rhythmVocabulary": ["syncopated", "eighths"]
+    },
+    {
+      "id": "eighth-triplet-bar",
+      "name": "Eighth Triplet Bar",
+      "timeSignature": "4/4",
+      "difficulty": 4,
+      "durations": [
+        { "base": "eighth", "dots": 0, "tuplet": { "numerator": 3, "denominator": 2 }, "ticks": 160 },
+        { "base": "eighth", "dots": 0, "tuplet": { "numerator": 3, "denominator": 2 }, "ticks": 160 },
+        { "base": "eighth", "dots": 0, "tuplet": { "numerator": 3, "denominator": 2 }, "ticks": 160 },
+        { "base": "eighth", "dots": 0, "tuplet": { "numerator": 3, "denominator": 2 }, "ticks": 160 },
+        { "base": "eighth", "dots": 0, "tuplet": { "numerator": 3, "denominator": 2 }, "ticks": 160 },
+        { "base": "eighth", "dots": 0, "tuplet": { "numerator": 3, "denominator": 2 }, "ticks": 160 },
+        { "base": "eighth", "dots": 0, "tuplet": { "numerator": 3, "denominator": 2 }, "ticks": 160 },
+        { "base": "eighth", "dots": 0, "tuplet": { "numerator": 3, "denominator": 2 }, "ticks": 160 },
+        { "base": "eighth", "dots": 0, "tuplet": { "numerator": 3, "denominator": 2 }, "ticks": 160 },
+        { "base": "eighth", "dots": 0, "tuplet": { "numerator": 3, "denominator": 2 }, "ticks": 160 },
+        { "base": "eighth", "dots": 0, "tuplet": { "numerator": 3, "denominator": 2 }, "ticks": 160 },
+        { "base": "eighth", "dots": 0, "tuplet": { "numerator": 3, "denominator": 2 }, "ticks": 160 }
+      ],
+      "rhythmVocabulary": ["triplet", "eighths"]
+    },
+    {
+      "id": "quarter-triplet-bar",
+      "name": "Quarter Triplet Bar",
+      "timeSignature": "4/4",
+      "difficulty": 4,
+      "durations": [
+        { "base": "quarter", "dots": 0, "tuplet": { "numerator": 3, "denominator": 2 }, "ticks": 320 },
+        { "base": "quarter", "dots": 0, "tuplet": { "numerator": 3, "denominator": 2 }, "ticks": 320 },
+        { "base": "quarter", "dots": 0, "tuplet": { "numerator": 3, "denominator": 2 }, "ticks": 320 },
+        { "base": "quarter", "dots": 0, "tuplet": { "numerator": 3, "denominator": 2 }, "ticks": 320 },
+        { "base": "quarter", "dots": 0, "tuplet": { "numerator": 3, "denominator": 2 }, "ticks": 320 },
+        { "base": "quarter", "dots": 0, "tuplet": { "numerator": 3, "denominator": 2 }, "ticks": 320 }
+      ],
+      "rhythmVocabulary": ["triplet", "quarters"]
+    },
+    {
+      "id": "sixteenth-run-then-quarters",
+      "name": "Sixteenth Run then Quarters",
+      "timeSignature": "4/4",
+      "difficulty": 4,
+      "durations": [
+        { "base": "sixteenth", "dots": 0, "ticks": 120 },
+        { "base": "sixteenth", "dots": 0, "ticks": 120 },
+        { "base": "sixteenth", "dots": 0, "ticks": 120 },
+        { "base": "sixteenth", "dots": 0, "ticks": 120 },
+        { "base": "quarter", "dots": 0, "ticks": 480 },
+        { "base": "quarter", "dots": 0, "ticks": 480 },
+        { "base": "quarter", "dots": 0, "ticks": 480 }
+      ],
+      "rhythmVocabulary": ["sixteenth", "straight"]
+    },
+    {
+      "id": "sixteenth-eighth-grouping",
+      "name": "Two Sixteenths + Eighth Grouping",
+      "timeSignature": "4/4",
+      "difficulty": 4,
+      "durations": [
+        { "base": "sixteenth", "dots": 0, "ticks": 120 },
+        { "base": "sixteenth", "dots": 0, "ticks": 120 },
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "sixteenth", "dots": 0, "ticks": 120 },
+        { "base": "sixteenth", "dots": 0, "ticks": 120 },
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "sixteenth", "dots": 0, "ticks": 120 },
+        { "base": "sixteenth", "dots": 0, "ticks": 120 },
+        { "base": "eighth", "dots": 0, "ticks": 240 },
+        { "base": "sixteenth", "dots": 0, "ticks": 120 },
+        { "base": "sixteenth", "dots": 0, "ticks": 120 },
+        { "base": "eighth", "dots": 0, "ticks": 240 }
+      ],
+      "rhythmVocabulary": ["sixteenth", "eighths"]
+    },
+    {
+      "id": "gallop-dotted-eighth-sixteenth",
+      "name": "Gallop (Dotted Eighth + Sixteenth)",
+      "timeSignature": "4/4",
+      "difficulty": 4,
+      "durations": [
+        { "base": "eighth", "dots": 1, "ticks": 360 },
+        { "base": "sixteenth", "dots": 0, "ticks": 120 },
+        { "base": "eighth", "dots": 1, "ticks": 360 },
+        { "base": "sixteenth", "dots": 0, "ticks": 120 },
+        { "base": "eighth", "dots": 1, "ticks": 360 },
+        { "base": "sixteenth", "dots": 0, "ticks": 120 },
+        { "base": "eighth", "dots": 1, "ticks": 360 },
+        { "base": "sixteenth", "dots": 0, "ticks": 120 }
+      ],
+      "rhythmVocabulary": ["dotted", "sixteenth"]
+    },
+    {
+      "id": "half-then-quarters",
+      "name": "Half then Quarters",
+      "timeSignature": "4/4",
+      "difficulty": 1,
+      "durations": [
+        { "base": "half", "dots": 0, "ticks": 960 },
+        { "base": "quarter", "dots": 0, "ticks": 480 },
+        { "base": "quarter", "dots": 0, "ticks": 480 }
+      ],
+      "rhythmVocabulary": ["straight", "quarters"]
+    },
+    {
+      "id": "two-halves",
+      "name": "Two Half Notes",
+      "timeSignature": "4/4",
+      "difficulty": 1,
+      "durations": [
+        { "base": "half", "dots": 0, "ticks": 960 },
+        { "base": "half", "dots": 0, "ticks": 960 }
+      ],
+      "rhythmVocabulary": ["straight", "long"]
+    },
+    {
+      "id": "dotted-half-quarter",
+      "name": "Dotted Half + Quarter",
+      "timeSignature": "4/4",
+      "difficulty": 2,
+      "durations": [
+        { "base": "half", "dots": 1, "ticks": 1440 },
+        { "base": "quarter", "dots": 0, "ticks": 480 }
+      ],
+      "rhythmVocabulary": ["dotted", "long"]
+    },
+    {
+      "id": "whole-note",
+      "name": "Whole Note",
+      "timeSignature": "4/4",
+      "difficulty": 1,
+      "durations": [
+        { "base": "whole", "dots": 0, "ticks": 1920 }
+      ],
+      "rhythmVocabulary": ["straight", "long"]
+    }
+  ]
+}
