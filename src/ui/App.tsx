@@ -41,7 +41,7 @@ import {
 // `config` IPC member); importing it keeps a single source of truth for the type.
 import './appConfig.js';
 
-const COUNT_IN_BARS = 2;
+const COUNT_IN_BARS = 1;
 const RETRY_SLOWER_FACTOR = 0.7; // retry_slower tempo = 70% of configured tempo
 
 export function App(): React.JSX.Element {
@@ -297,15 +297,20 @@ export function App(): React.JSX.Element {
         {phase === 'countIn' && countInTotalBeats > 0 && (
           <div className="countin-overlay" role="status" aria-live="polite">
             <div className="countin-label">Count-in</div>
-            <div className="countin-number" key={countInBeat}>
-              {countInBeat}
+            {/* Count DOWN (e.g. 4,3,2,1) — remaining beats until the line starts. */}
+            <div
+              className="countin-number"
+              key={countInTotalBeats - countInBeat + 1}
+            >
+              {countInTotalBeats - countInBeat + 1}
             </div>
             <div className="countin-dots">
               {Array.from({ length: countInTotalBeats }, (_, i) => (
                 <span
                   key={i}
                   className={
-                    'countin-dot' + (i + 1 === countInBeat ? ' is-current' : '')
+                    'countin-dot' +
+                    (i < countInTotalBeats - countInBeat + 1 ? ' is-current' : '')
                   }
                 />
               ))}
