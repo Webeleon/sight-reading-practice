@@ -2219,3 +2219,44 @@ weights) copies from src/ui/public/models/crepe/ to dist-electron/renderer/model
 as DEFAULT_DETECTOR_KIND (default + fallback); CREPE opt-in. Bundle size is expected and
 acceptable for a throwaway prototype (no code-splitting / lazy tfjs import attempted —
 latency + size are out of scope per brief section 2).
+
+## HUMAN REVIEW GATE 3 — DECISION (2026-06-06): CREPE is the default detector
+
+SUPERSEDES the earlier notes in this file that call pitchy the default. After the
+human ran a real-guitar A/B (pitchy vs CREPE) in the detection-review view, the
+verdict was unambiguous ("CREPE is way better"), so `DEFAULT_DETECTOR_KIND` is now
+`'crepe'` (commit making CREPE default; the CREPE feature itself was 676a79c).
+
+WHY (the evidence):
+- pitchy (autocorrelation / McLeod) made systematic OCTAVE ERRORS on guitar — e.g. an
+  A4/G4/F4 line was detected down at E2/F2/G2 (~82-95 Hz), latching onto a sub-octave.
+  Live, this produced mostly-garbage detections + missed notes. This is exactly the
+  "accuracy insufficient for clean single-note guitar input" trigger the brief (§4)
+  names for escalating to CREPE.
+- CREPE (the bundled tfjs model) was independently validated offline against synthetic
+  tones across the guitar range: G3 196Hz→195.6 (-4¢), A3 220→219.9 (-1¢), E4 330→330.4
+  (+2¢), A4 440→441.0 (+4¢), E5 660→660.3 (+1¢), A5 880→881.2 (+2¢). Confidence
+  0.83-0.93. **Zero octave errors** — the failure mode pitchy had. The live take then
+  confirmed it.
+
+WHAT WE KEPT:
+- pitchy remains a SELECTABLE detector (the "Detector: pitchy | CREPE" toggle stays) and
+  the AUTOMATIC FALLBACK: if the CREPE tfjs model fails to load at run start,
+  AudioGraph.start() catches it, logs `[CREPE] ... FALLING BACK to pitchy`, and the take
+  still runs on pitchy. A persisted user choice (appConfig) still overrides the default.
+
+COST ACCEPTED (throwaway, latency/size out of scope per §2):
+- tfjs bundles into the renderer (~4.9M JS) + a local CREPE model (~1.9M, model.json + 13
+  shards) served same-origin. CSP relaxed to `script-src 'self' 'wasm-unsafe-eval'
+  'unsafe-eval'` for the tfjs backends; the model loads same-origin (no remote fetch).
+- Per-frame neural inference is heavier than autocorrelation; fine here.
+
+RECOMMENDATION FOR THE SWIFT REWRITE:
+- Do NOT ship an autocorrelation/YIN-style tracker as the primary for guitar — the octave
+  errors are severe and user-visible. Use a robust pitch model. Native options: a CREPE
+  Core ML port, Apple's pitch/`SNAudioStreamAnalyzer` family, or pYIN with explicit octave
+  correction. The ~2MB model is trivial to bundle. None of the web CSP/`unsafe-eval`
+  concerns apply natively. Keep a lightweight fallback for model-load failure.
+- The detection-review view (per-note cents/timing table + pitch-vs-time trace + recording)
+  was the decisive tool for making this call — worth reproducing as a dev/diagnostic screen
+  in the native app.
