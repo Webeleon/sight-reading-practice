@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { readFile, writeFile, mkdir } from 'node:fs/promises';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
+const moduleDir = dirname(fileURLToPath(import.meta.url));
 
 // ----------------------------------------------------------------------------
 // Tiny config persistence (Milestone 4 device picker).
@@ -88,7 +88,7 @@ function createWindow(): void {
     show: false,
     webPreferences: {
       // Secure defaults: isolate the renderer from Node, expose only what preload chooses.
-      preload: join(__dirname, '../preload/preload.mjs'),
+      preload: join(moduleDir, '../preload/preload.mjs'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false, // preload uses ESM/Node require for the bridge; fine for a prototype
@@ -104,7 +104,7 @@ function createWindow(): void {
     void win.loadURL(RENDERER_DEV_URL);
     win.webContents.openDevTools({ mode: 'right' });
   } else {
-    const indexHtml = join(__dirname, '../renderer/index.html');
+    const indexHtml = join(moduleDir, '../renderer/index.html');
     console.log(`[MAIN] loading built renderer: ${indexHtml}`);
     void win.loadFile(indexHtml);
   }

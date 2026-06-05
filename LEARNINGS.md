@@ -1373,3 +1373,21 @@ enumeration/persistence, live pitch-detection stability on clean notes, the CREP
 escalation decision, and the subjective feedback-UX feel. The clarity threshold (0.6),
 BASE_ONSET_TOLERANCE_MS (90), and measured round-trip latency placeholders in this file
 must be calibrated at that gate.
+
+## Electron launch gotchas (post-M4 fix — found only by actually launching)
+
+Browser-serving the built renderer (how M3/M4 were verified) does NOT exercise the
+Electron MAIN process, so two main-bundle bugs slipped through until `npm run dev`:
+
+1. **`electron` must be externalized in the main + preload builds.** It's a devDependency,
+   and electron-vite's `externalizeDepsPlugin()` only externalizes package.json
+   *dependencies*, so electron's npm shim (`index.js` with `getElectronPath()`) got bundled
+   into main.mjs. At launch the shim looked for `path.txt` next to the bundle, failed, and
+   threw "Electron failed to install correctly" (a red herring — the binary was fine). Fix:
+   `rollupOptions.external: ['electron']` on both main and preload.
+2. **Don't declare `const __dirname` in an ESM main.** electron-vite injects a `__dirname`
+   shim for ESM output; main.ts also declared one -> `SyntaxError: Identifier '__dirname'
+   has already been declared`. Fix: name the local something else (`moduleDir`).
+
+Verification lesson: for Electron, always smoke-test the real launch
+(`npm run preview` / `npm run dev`), not just a browser-served renderer.
