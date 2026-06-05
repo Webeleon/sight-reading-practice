@@ -22,6 +22,7 @@ import {
   DEFAULT_COUNT_IN_BARS,
   AudioGraph,
   type Schedule,
+  type DetectionFrame,
 } from '../audio/index.js';
 import {
   evaluateAttempt,
@@ -41,6 +42,27 @@ import {
 export type Phase = 'idle' | 'countIn' | 'playing' | 'finished';
 
 export type AttemptType = 'first_read' | 'retry_at_tempo' | 'retry_slower';
+
+/**
+ * The per-run DETECTION-REVIEW payload, in-memory only (never persisted). Exposed
+ * alongside the EvaluationResult so the review screen can show what the app
+ * detected, how far off it was, and replay the take:
+ *   - frames:    the CONTINUOUS raw detector trace (live mode only; empty for a
+ *                synthetic take, which has no per-frame data — the review then
+ *                draws discrete points from `detected`).
+ *   - detected:  the committed DetectedNote[] (both modes; carries freqHz in live
+ *                mode for exact cents errors).
+ *   - recording: the recorded-audio Blob for playback (live mode; null for
+ *                synthetic, which has no mic — the audio player is hidden).
+ *   - expected:  the rest-filtered ExpectedNote[] the run was read against (so the
+ *                review graph can draw the expected segments without re-deriving).
+ */
+export interface ReviewPayload {
+  frames: DetectionFrame[];
+  detected: DetectedNote[];
+  recording: Blob | null;
+  expected: ExpectedNote[];
+}
 
 export interface UseSightReadingOptions {
   line: Line | null;
@@ -65,6 +87,11 @@ export interface UseSightReading {
   isRunning: boolean;
   /** The evaluation result, available once a run finishes (else null). */
   result: EvaluationResult | null;
+  /** The detection-review payload for the finished run (frames + detected +
+   *  recording + expected), available alongside `result` (else null). In-memory
+   *  only. The recording field may fill in slightly AFTER `result` (MediaRecorder
+   *  finalises asynchronously); the object is replaced when the Blob resolves. */
+  review: ReviewPayload | null;
   /** attempt_type of the run that produced `result`. */
   attemptType: AttemptType;
   /** Live count of detected notes so far (for an on-screen readout). */
@@ -112,6 +139,7 @@ export function useSightReading(
   const [phase, setPhase] = useState<Phase>('idle');
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<EvaluationResult | null>(null);
+  const [review, setReview] = useState<ReviewPayload | null>(null);
   const [attemptType, setAttemptType] = useState<AttemptType>('first_read');
   const [detectedCount, setDetectedCount] = useState(0);
   const [countInBeat, setCountInBeat] = useState(0);
@@ -177,6 +205,7 @@ export function useSightReading(
       attemptTypeRef.current = type;
       setAttemptType(type);
       setResult(null);
+      setReview(null);
       setDetectedCount(0);
       // Count-in indicator: total beats across the count-in bars.
       const totalCountInBeats = countInBars * runLine.timeSignature.beats;
@@ -294,11 +323,12 @@ export function useSightReading(
         } else {
           rafRef.current = null;
           // End of run: stop input, do the FINAL authoritative evaluation.
-          graphRef.current?.stop();
+          const graph = graphRef.current; // capture before clearing for review
+          graph?.stop();
           graphRef.current = null;
           metronomeRef.current?.stop();
           metronomeRef.current = null;
-          finalizeEvaluation();
+          finalizeEvaluation(graph);
           setIsRunning(false);
         }
       };
@@ -333,8 +363,10 @@ export function useSightReading(
         cur.colorNotes(feedback);
       };
 
-      /** Final, authoritative evaluation + full recolour for the results screen. */
-      const finalizeEvaluation = (): void => {
+      /** Final, authoritative evaluation + full recolour for the results screen.
+       *  `graph` is the live AudioGraph for this run (null in synthetic mode), the
+       *  source of the review's raw frames + recording. */
+      const finalizeEvaluation = (graph: AudioGraph | null): void => {
         const evalResult = evaluateAttempt(expectedRef.current, detectedRef.current, {
           tempoBpm: runLine.tempo,
           subdivision,
@@ -349,6 +381,35 @@ export function useSightReading(
         cursorRef.current?.colorNotes(feedback);
         cursorRef.current?.moveTo(scheduleRef.current!.entries.length - 1);
         setResult(evalResult);
+
+        // Build the in-memory detection-review payload. Synthetic mode has no graph
+        // -> no frames, no recording (the review draws discrete points from the
+        // detected notes and hides the audio player). The detected/expected arrays
+        // are snapshotted so a later run can't mutate this payload.
+        const frames: DetectionFrame[] = graph ? graph.getFrames() : [];
+        const detectedSnapshot = detectedRef.current.slice();
+        const expectedSnapshot = expectedRef.current.slice();
+        // Recording is null initially (and forever in synthetic mode); in live mode
+        // it resolves asynchronously after the recorder flushes — patch it in then.
+        setReview({
+          frames,
+          detected: detectedSnapshot,
+          recording: null,
+          expected: expectedSnapshot,
+        });
+        if (graph) {
+          void graph.getRecording().then((blob) => {
+            if (blob) {
+              setReview((prev) =>
+                prev ? { ...prev, recording: blob } : prev,
+              );
+              console.log(
+                `[UI] review recording ready: ${blob.size} bytes (${blob.type})`,
+              );
+            }
+          });
+        }
+
         setPhase('finished');
         console.log(
           `[EVAL] attempt complete: type=${attemptTypeRef.current} ` +
@@ -357,6 +418,10 @@ export function useSightReading(
             `hits=${evalResult.hits} wrong=${evalResult.wrongPitch} ` +
             `late=${evalResult.late} missed=${evalResult.missed} extra=${evalResult.extra} ` +
             `(countsTowardFluency=${attemptTypeRef.current === 'first_read'})`,
+        );
+        console.log(
+          `[UI] review payload: frames=${frames.length} detected=${detectedSnapshot.length} ` +
+            `expected=${expectedSnapshot.length} mode=${graph ? 'LIVE' : 'SYNTHETIC'}`,
         );
       };
 
@@ -371,6 +436,7 @@ export function useSightReading(
     phase,
     isRunning,
     result,
+    review,
     attemptType,
     detectedCount,
     countInBeat,

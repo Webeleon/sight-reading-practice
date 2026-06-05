@@ -43,3 +43,12 @@ export { classifyNotes } from './classify.js';
 
 // --- metrics (public entry point) ---
 export { evaluateAttempt, summarize } from './metrics.js';
+
+// --- detection review (PURE delta helpers; node-testable) ---
+export type { ReviewRow, ReviewExtra, ReviewModel } from './review.js';
+export {
+  buildReviewModel,
+  freqToCents,
+  midiToFreq,
+  isOctaveError,
+} from './review.js';

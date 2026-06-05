@@ -26,6 +26,13 @@ export interface DetectedNote {
   /** Optional detector confidence 0..1; detections below CLARITY_THRESHOLD are
    *  dropped before alignment. Absent = trusted. */
   clarity?: number;
+  /** Optional REPRESENTATIVE fundamental in Hz that produced `midi` (the onset
+   *  segmenter populates this from the frames it grouped). Carried purely so the
+   *  detection-review layer can compute an exact CENTS pitch error against the
+   *  expected note's frequency; evaluation/classification never reads it. Absent
+   *  for synthetic takes (only an integer MIDI is known) — the review then falls
+   *  back to a semitone difference. */
+  freqHz?: number;
 }
 
 /**

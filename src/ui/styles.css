@@ -600,3 +600,200 @@ body {
   color: #06121f;
   font-weight: 600;
 }
+
+/* --- Detection review (post-take Gate-3 accuracy tool) ------------------- */
+
+.detection-review {
+  margin-top: 8px;
+  padding: 16px;
+  background: #11141a;
+  border: 1px solid #2a2f3a;
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.review-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.review-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+.review-mode {
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.review-section h4 {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--fg);
+}
+.review-section h5 {
+  margin: 12px 0 6px;
+  font-size: 13px;
+  color: var(--fg);
+}
+.review-empty {
+  color: var(--muted);
+  font-style: italic;
+  font-size: 13px;
+}
+
+/* Per-note table */
+.review-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.review-table th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  border-bottom: 1px solid #2a2f3a;
+  padding: 4px 10px 6px;
+}
+.review-table td {
+  padding: 4px 10px;
+  border-bottom: 1px solid #1c2029;
+}
+.review-cell-index {
+  color: var(--muted);
+}
+.review-cell-num {
+  text-align: right;
+}
+.review-table th:nth-child(4),
+.review-table th:nth-child(5) {
+  text-align: right;
+}
+
+/* Row tints so wrong / late rows are easy to scan. Mirrors the staff colours. */
+.review-row-wrong_pitch {
+  background: rgba(224, 49, 49, 0.12);
+}
+.review-row-late {
+  background: rgba(255, 209, 102, 0.1);
+}
+.review-row-missed {
+  color: var(--muted);
+  background: rgba(154, 160, 166, 0.07);
+}
+.review-row-octave {
+  outline: 1px dashed rgba(116, 143, 252, 0.5);
+  outline-offset: -1px;
+}
+
+.review-octave-flag {
+  color: #748ffc;
+  font-weight: 700;
+  font-size: 11px;
+}
+.review-class-pill {
+  font-weight: 700;
+}
+
+.review-extras-sub {
+  color: var(--muted);
+  font-weight: 400;
+  font-size: 11px;
+}
+.review-table-extras {
+  width: auto;
+}
+.review-row-extra {
+  background: rgba(116, 143, 252, 0.08);
+}
+
+/* Pitch-vs-time graph */
+.review-graph-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.review-graph {
+  width: 100%;
+  max-width: 720px;
+  background: #0c0e13;
+  border: 1px solid #2a2f3a;
+  border-radius: 6px;
+}
+.review-grid {
+  stroke: #21262f;
+  stroke-width: 1;
+}
+.review-axis-label {
+  fill: var(--muted);
+  font-size: 9px;
+  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+}
+.review-expected-bar {
+  stroke: #4f9cff;
+  stroke-width: 4;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+.review-trace {
+  fill: none;
+  stroke: #8ce99a;
+  stroke-width: 1.5;
+  opacity: 0.9;
+}
+.review-detected-dot {
+  fill: #ffd166;
+  stroke: #11141a;
+  stroke-width: 0.75;
+}
+
+.review-graph-legend {
+  display: flex;
+  gap: 18px;
+  flex-wrap: wrap;
+  font-size: 12px;
+  color: var(--muted);
+}
+.review-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.review-legend-bar {
+  display: inline-block;
+  width: 18px;
+  height: 4px;
+  border-radius: 2px;
+  background: #4f9cff;
+  opacity: 0.55;
+}
+.review-legend-trace {
+  display: inline-block;
+  width: 18px;
+  height: 2px;
+  background: #8ce99a;
+}
+.review-legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffd166;
+}
+
+/* Audio playback */
+.review-audio-player {
+  width: 100%;
+  max-width: 480px;
+  margin-top: 4px;
+}

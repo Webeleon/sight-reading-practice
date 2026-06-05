@@ -59,9 +59,14 @@ export {
 } from './pitchDetector.js';
 
 // --- live input graph (Web Audio + getUserMedia) ---
-export type { AudioInputDevice, AudioGraphOptions } from './audioGraph.js';
+export type {
+  AudioInputDevice,
+  AudioGraphOptions,
+  DetectionFrame,
+} from './audioGraph.js';
 export {
   AudioGraph,
   enumerateInputDevices,
   ensureMicPermission,
+  RECORDING_MIME_TYPE,
 } from './audioGraph.js';

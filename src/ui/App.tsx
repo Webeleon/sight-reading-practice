@@ -97,6 +97,7 @@ export function App(): React.JSX.Element {
     phase,
     isRunning,
     result,
+    review,
     attemptType,
     detectedCount,
     countInBeat,
@@ -426,6 +427,7 @@ export function App(): React.JSX.Element {
           line={line}
           result={result}
           attemptType={attemptType}
+          review={review}
           onNextLine={handleNextLine}
           onRetryAtTempo={handleRetryAtTempo}
           onRetrySlower={handleRetrySlower}

@@ -1822,3 +1822,181 @@ remain as a historical record of the native-module era; they no longer describe 
 **Verified.** `npx vitest run src/persistence` + `tests/e2e.persistence.test.ts` green; `npm run verify`
 green; `npm run build` (electron-vite) green; `grep` confirms zero `better-sqlite3` references remain in
 `src/`, `electron/`, `package.json`, or `electron.vite.config.ts`.
+
+---
+
+## Detection-review capture: raw frames + MediaRecorder (Gate-3 validation feature)
+
+Built the DATA-CAPTURE + pure delta helpers behind the post-take detection-review screen
+(per-note table + pitch-vs-time graph + audio playback). In-memory only, no DB persistence.
+
+**Pure delta helpers live in `src/evaluation/review.ts` (node-tested, no DOM, no `any`).**
+`buildReviewModel(result, detected)` consumes the ALREADY-computed `EvaluationResult` (so the
+review never re-runs alignment and always agrees with the results screen) plus the raw
+`DetectedNote[]` (the only source of the representative `freqHz`). It emits one `ReviewRow`
+per expected note + leftover `ReviewExtra[]`. Cents helpers: `freqToCents(freq, ref) =
+1200*log2(freq/ref)`, `midiToFreq`, `isOctaveError` (non-zero multiple of 12 semitones).
+- **Cents vs semitones:** `pitchErrorCents` is non-null ONLY when the detection carries a
+  `freqHz` (live mode); synthetic takes know only an integer MIDI, so cents is null and the
+  consumer falls back to `pitchErrorSemitones` (always present when there is a detection).
+- **Recovering freqHz from a NoteResult:** `NoteResult` carries `detectedMidi`+`detectedOnsetMs`
+  but NOT the frequency, so we match each detected row back to its source `DetectedNote` by
+  `(midi, onsetMs)` with a one-for-one consumed-source index (duplicate detections don't all
+  claim the same source freq).
+- **No layering inversion:** evaluation is a pure layer that must not import from `src/audio`.
+  A4=440/MIDI=69 are duplicated in `src/evaluation/pitchConst.ts` (mirrors `audio/pitchMath.ts`)
+  ON PURPOSE so evaluation has zero transitive Web-Audio dependency. Retuning => edit both.
+
+**`DetectedNote` extended with optional `freqHz`.** The `OnsetSegmenter` now tracks the
+frequency of the highest-CLARITY frame in each run and emits it as the representative
+`freqHz` on the committed onset (the clearest frame, not the attack-transient first frame,
+which often reads a harmonic/wrong octave). Evaluation/classification ignore `freqHz`
+entirely — it exists purely for the review's exact cents error.
+
+**Raw frames (`DetectionFrame { tMs, freqHz, clarity, midi }`).** The detector already fires
+`onSample` per analysis frame (~rAF cadence, ~16ms). `AudioGraph` now wraps `onSample` to push
+EVERY frame (including silent ones: freq 0 / midi NaN) into an in-memory array on the SAME
+schedule clock (`tMs` from `audioTimeToScheduleMs`, t0 = first count-in click) and still
+forwards to the caller. Retrieved via `getFrames()` (defensive copy). This is the continuous
+trace the review graph draws in LIVE mode; SYNTHETIC mode has no frames (empty array) and the
+graph falls back to discrete points from the detected notes.
+
+**MediaRecorder findings:**
+- **MIME type:** Chromium/Electron's MediaRecorder records `audio/webm;codecs=opus` natively
+  and an `<audio controls src=objectURL>` plays it back with no decoder plumbing. We probe
+  `MediaRecorder.isTypeSupported` (itself optional on some impls — guard it), prefer
+  `audio/webm;codecs=opus` (exported as `RECORDING_MIME_TYPE`), fall back to `audio/webm`,
+  then to the implementation default (`''`). All wrapped in try/catch — a runtime without
+  MediaRecorder (e.g. happy-dom, or a locked-down env) simply yields a null recording, which
+  is exactly the synthetic-mode shape, so the review degrades gracefully.
+- **Finalisation is ASYNC.** MediaRecorder flushes its final chunk on a trailing
+  `ondataavailable` that fires BEFORE `onstop` but AFTER the synchronous `stop()` call returns.
+  So you CANNOT assemble the Blob synchronously in your own `stop()`. We expose
+  `getRecording(): Promise<Blob|null>` backed by a per-run deferred that the recorder's
+  `onstop` handler resolves (it assembles `new Blob(chunks, { type })` once the chunk list is
+  complete). Call `stop()` first, then `await getRecording()`.
+- **Timeslice:** we `start(1000)` so chunks accumulate every ~1s during the run (a take that
+  ends abruptly still has most of its data); the final partial chunk arrives on `stop()`.
+- **Frame rate:** detection frames come at the rAF cadence (~60fps => ~16ms => ~62 frames/sec).
+  A typical short line (a few seconds incl. count-in) yields a few hundred frames — cheap to
+  keep in memory and plenty dense for a smooth pitch trace.
+
+**Hook wiring (`useSightReading`).** Added a `review: ReviewPayload | null`
+(`{ frames, detected, recording, expected }`) to the return value ALONGSIDE the existing
+`result` (existing API untouched, purely additive). At run end the hook snapshots
+`getFrames()` + the detected/expected arrays into `review` immediately (recording null), then
+patches the recording in when `getRecording()` resolves (live mode only) via a functional
+`setReview` update. Synthetic runs have no `AudioGraph` => `frames: []`, `recording: null`,
+so the review screen renders the table + discrete-point graph and hides the audio player.
+
+**Testing the impure capture without hardware.** `src/audio/audioGraph.dom.test.ts` runs under
+happy-dom (which has `Blob`/`URL`/`requestAnimationFrame` but NO `AudioContext`/`MediaRecorder`)
+and fakes `getUserMedia`, a minimal `AudioContext` (silent analyser so pitchy's one synchronous
+pass is cheap/deterministic), and a controllable `FakeMediaRecorder` (push chunks, fire
+ondataavailable+onstop on stop). Stubbing `globalThis.requestAnimationFrame` to a no-op keeps
+the detector loop from spinning past its first synchronous pass. This locks down MIME
+selection/fallback, async Blob assembly, the null paths (no data / disabled / no MediaRecorder),
+and frame capture + onSample forwarding — all without a guitar. Live detection ACCURACY remains
+Human Review Gate 3 (not unit-testable).
+
+**Verified.** `npx vitest run src/evaluation src/audio` green (111 tests); `npm run verify` green
+(409 tests + 1000-line property + pure/node/ui typecheck + check-purity); `npm run build`
+(electron-vite) green. No DB persistence added; existing `useSightReading` API unchanged (additive).
+
+---
+
+## Detection-review UI (post-take, in-memory) — the screen
+
+**What ships.** A `DetectionReview` component (`src/ui/components/DetectionReview.tsx`) that
+CONSUMES the pure `buildReviewModel(result, detected)` + the in-memory `ReviewPayload` from
+`useSightReading`, and renders the three parts the human picked: (1) a per-EXPECTED-note table,
+(2) an inline SVG pitch-vs-time graph, (3) an `<audio controls>` for the recording (live only).
+It is surfaced from `ResultsScreen` behind a collapsed "Detection detail" toggle, so the metrics
+stay the primary read and the per-note review is opt-in — and it appears after ANY take
+(synthetic or live). No new deps; plain SVG/CSS. Nothing persisted.
+
+**Pure vs impure split held cleanly.** The component does ZERO pitch/timing math itself — every
+number (cents vs semitones, signed timing, octave flag, extras) comes straight from the pure
+`ReviewRow`/`ReviewExtra` model. The component only does *presentation* decisions: which colour,
+which label, em-dash for nulls. That kept `check-purity` trivially green (the helpers live in
+`src/evaluation`, the view in `src/ui`) and means the table can never disagree with the staff
+colours or the results counts.
+
+**MIDI labels: key-agnostic on purpose.** The review is a *detector-accuracy* tool, not notation,
+so it uses a local sharps-only `midiLabel` (60 -> "C4") instead of the key-aware `midiToPitch`.
+Avoids dragging key context into the UI and avoids spelling a *detected* (possibly wrong) pitch
+against the line's key, which would be misleading. Octave errors get an explicit "8va" flag +
+dashed row outline because they're a detector artifact, not a reading fault.
+
+**SVG graph, synthetic vs live (the load-bearing distinction).**
+- X = time(ms) over the take, Y = MIDI auto-ranged to all notes +/- 3 semitones (Y inverted so
+  higher pitch is higher on screen). Gridline density adapts to the MIDI span (1/2/4 semitone
+  step) so labels never crowd.
+- EXPECTED notes draw as horizontal blue bars (onset..onset+duration at MIDI) in BOTH modes.
+- DETECTED pitch overlays two ways: a CONTINUOUS green polyline from `frames[]` (LIVE) AND
+  yellow dots at each committed `(onsetMs, midi)` detection (BOTH modes). In SYNTHETIC mode
+  `frames` is empty so only the dots show — the graph still reads. The dots are kept even in
+  live mode because they mark the actual onsets the evaluator used (drift vs the expected bar is
+  then visible at a glance).
+- Trace gotcha: silent pitchy frames carry `freqHz:0 / midi:NaN`; filter them out BEFORE drawing
+  or the polyline snaps to the bottom. Also break the polyline into segments at >120ms time gaps
+  so a silence doesn't draw a straight line across unrelated pitches. "Is this live?" is derived
+  from "are there any usable (finite-midi, freq>0) frames", which is also what hides/shows the
+  trace legend.
+
+**Audio player lifecycle.** `RecordingPlayer` creates the object URL in a `useEffect` keyed on the
+Blob and REVOKES it in the cleanup (unmount or new Blob) so URLs never leak. The whole section is
+conditionally rendered only when `review.recording` is truthy, so synthetic / no-mic takes simply
+have no audio block (rather than a disabled/empty player). Because the recording resolves AFTER
+`result` (MediaRecorder finalises async), the player just pops in when the Blob arrives — the
+panel is already mounted by then if the user opened the detail toggle.
+
+**Wiring was additive.** `App.tsx` now also destructures `review` from `useSightReading` and passes
+it to `ResultsScreen`; `ResultsScreen` gained an optional `review?` prop + a `showDetail` toggle.
+The existing Next line / Retry-at-tempo / Retry-slower actions and keyboard transport are
+untouched. `npm run build` (renderer bundles) and `npm run verify` (409 tests + property +
+pure/node/ui typecheck + check-purity) both green.
+
+---
+
+## Adversarial verification of detection-review delta math + capture (Gate-3 sign-off)
+
+Independent re-derivation of every review delta (throwaway `scripts/_verify_deltas.ts`, run
+via `node --import tsx`, then deleted) — 32 assertions, all held:
+
+- **Cents.** `freqToCents(445,440)` = 19.562175¢, matching the brief's stated ~19.56 and an
+  independent `1200*log2(445/440)`. One ET semitone = exactly +100¢ (and -100¢ inverted);
+  one octave = exactly +1200¢. `midiToFreq(69)=440`, `midiToFreq(60)=261.6256`. Self-reference
+  cents == 0. NaN-safe on 0 / negative / non-finite inputs (UI guards on this).
+- **Octave flag.** `isOctaveError` true at EXACTLY ±12 and ±24 (incl. non-zero bases), false at
+  0, ±7, and the adversarial near-misses ±11 / ±13. Confirmed end-to-end: a +12 detection rows
+  out as `wrong_pitch` with `isOctaveError=true` and `pitchErrorSemitones=12`.
+- **Timing sign.** Through the full `evaluateAttempt -> buildReviewModel` pipeline: a 30ms-late
+  detection -> `timingErrorMs=+30`, a 30ms-early one -> `-30` (literally detected - expected).
+- **Cents vs semitone fallback.** Live (freqHz present): a 25¢-sharp detection surfaces
+  `pitchErrorCents≈25`, `pitchErrorSemitones=0`. Synthetic (no freqHz): `pitchErrorCents=null`,
+  semitone diff present. Missed: all detected fields null, `isOctaveError=false`.
+
+**Purity confirmed.** `review.ts` + `pitchConst.ts` live under `src/evaluation` (tsconfig.pure
++ NOANY_DIRS) — no DOM globals, no electron/react import, no `: any`, no transitive audio import
+(constants A4_HZ/A4_MIDI are intentionally duplicated from pitchMath.ts to avoid a layering
+inversion). `npm run verify` green (check-purity passes).
+
+**One-timeline clock alignment verified by reading the chain:** metronome anchors
+`startAudioTime = ctx.currentTime + 0.1` as schedule t=0 (first count-in click);
+`getStartAudioTime()` is passed to `graph.start()`; the detector mapper `(t)=>(t-t0)*1000` puts
+both per-frame `DetectionFrame.tMs` and committed `DetectedNote.onsetMs` on that clock;
+`precomputeSchedule` puts `ExpectedNote.onsetMs = countInOffsetMs + tickToMs(...)` on the SAME
+t=0. So the graph's expected bars, detected dots, and continuous frame trace share one X axis.
+
+**Synthetic mode does not crash (throwaway `*.dom.test.ts`, `react-dom/server` renderToString,
+then deleted).** With `frames=[]` + `recording=null`: per-note table renders, the graph draws
+discrete `review-detected-dot` circles with NO `review-trace` polyline, the octave 8va flag
+shows on a +12 row, the mode badge reads "synthetic · frames 0", and the audio player is HIDDEN
+(no `<audio>`, no Recording section — gated on `review.recording` truthiness). Empty-take
+(all-missed) and degenerate no-expected/no-detected ("no notes in this take") also render clean.
+
+**Note on the dot-only graph in synthetic mode:** `review.detected[]` is the only detected
+geometry; the continuous trace requires live `frames` (mic). This is by design and matches the
+constraint. `npm run verify` (409 tests + property + pure/node/ui typecheck + check-purity) and
+`npm run build` (electron-vite renderer/main/preload) both green after deleting both temp files.

@@ -78,6 +78,24 @@ describe('OnsetSegmenter — single notes', () => {
   it('emits nothing for pure silence', () => {
     expect(segment(silenceFrames(20, 0), cfg)).toHaveLength(0);
   });
+
+  it('reports a representative freqHz (from the clearest frame) on the onset', () => {
+    // A held A4 whose clearest frame is slightly detuned: the emitted freqHz must
+    // be that clearest frame's frequency, so the review layer can compute cents.
+    const detunedA4 = midiToFrequency(69) * Math.pow(2, 10 / 1200); // +10 cents
+    const samples: PitchSample[] = [
+      ...silenceFrames(2, 0),
+      { timeMs: 50, frequencyHz: detunedA4, clarity: 0.7 }, // attack, lower clarity
+      { timeMs: 66, frequencyHz: detunedA4, clarity: 0.95 }, // clearest frame
+      { timeMs: 82, frequencyHz: detunedA4, clarity: 0.8 },
+      ...silenceFrames(3, 120),
+    ];
+    const notes = segment(samples, cfg);
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.midi).toBe(69);
+    expect(notes[0]!.freqHz).toBeDefined();
+    expect(notes[0]!.freqHz!).toBeCloseTo(detunedA4, 6);
+  });
 });
 
 describe('OnsetSegmenter — pitch changes', () => {

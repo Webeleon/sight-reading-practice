@@ -7,9 +7,11 @@
 // (and Milestone 5 will persist): retry_at_tempo / retry_slower are excluded from
 // fluency stats; only first_read counts (brief section 11).
 
-import React from 'react';
+import React, { useState } from 'react';
 import type { Line } from '../../domain/index.js';
 import type { EvaluationResult } from '../../evaluation/index.js';
+import { DetectionReview } from './DetectionReview.js';
+import type { ReviewPayload } from '../useSightReading.js';
 
 /** attempt_type values (brief section 11). Only first_read counts toward fluency. */
 export type AttemptType = 'first_read' | 'retry_at_tempo' | 'retry_slower';
@@ -19,6 +21,15 @@ export interface ResultsScreenProps {
   result: EvaluationResult;
   /** The attempt_type that PRODUCED this result (so the human sees what they ran). */
   attemptType: AttemptType;
+  /**
+   * The in-memory detection-review payload for THIS run (frames + detected +
+   * recording + expected). When present a "Detection detail" toggle reveals the
+   * DetectionReview (per-note table + pitch-vs-time graph + audio playback). The
+   * recording field may fill in slightly after the result resolves (MediaRecorder
+   * finalises async) — the player simply appears when the Blob arrives. Null while
+   * the payload is still being assembled (it should be available alongside result).
+   */
+  review?: ReviewPayload | null;
   /** Generate + read a brand-new line (logged first_read). Primary action. */
   onNextLine: () => void;
   /** Re-read the SAME line at the same tempo (logged retry_at_tempo). */
@@ -50,10 +61,15 @@ export function ResultsScreen({
   line,
   result,
   attemptType,
+  review,
   onNextLine,
   onRetryAtTempo,
   onRetrySlower,
 }: ResultsScreenProps): React.JSX.Element {
+  // Detection-detail panel is collapsed by default (the results metrics are the
+  // primary read; the per-note review is opt-in for accuracy validation at Gate 3).
+  const [showDetail, setShowDetail] = useState(false);
+
   return (
     <div className="results-screen">
       <div className="results-header">
@@ -119,7 +135,24 @@ export function ResultsScreen({
         >
           Retry slower
         </button>
+        {review && (
+          <button
+            className={'btn btn-small' + (showDetail ? ' is-active' : '')}
+            onClick={() => setShowDetail((s) => !s)}
+            aria-expanded={showDetail}
+            title="Inspect what the app detected per note, the pitch-vs-time graph, and the recording"
+          >
+            {showDetail ? 'Hide detection detail' : 'Detection detail'}
+          </button>
+        )}
       </div>
+
+      {/* Post-take DETECTION REVIEW (Gate-3 accuracy validation): per-note table +
+          pitch-vs-time graph + (live only) audio playback. In-memory only. Works
+          for SYNTHETIC takes too (discrete-point graph, no audio player). */}
+      {review && showDetail && (
+        <DetectionReview result={result} review={review} />
+      )}
     </div>
   );
 }

@@ -86,6 +86,12 @@ interface SegmenterState {
   runFrames: number;
   /** best (max) clarity seen so far in the current run (reported on the onset). */
   runMaxClarity: number;
+  /** frequency (Hz) of the highest-clarity frame in the current run — the
+   *  REPRESENTATIVE fundamental reported on the onset as DetectedNote.freqHz, so
+   *  the detection-review layer can compute an exact cents error. Tracked
+   *  alongside runMaxClarity (updated whenever a new clarity high-water mark is
+   *  seen). 0 until the first usable frame of a run. */
+  runBestFreqHz: number;
   /** whether the current run has already been EMITTED as a committed note. */
   runEmitted: boolean;
   /** schedule-clock ms of the most recent USABLE frame (for gap measurement). */
@@ -102,6 +108,7 @@ function freshState(): SegmenterState {
     runStartMs: 0,
     runFrames: 0,
     runMaxClarity: 0,
+    runBestFreqHz: 0,
     runEmitted: false,
     lastUsableMs: -Infinity,
     lastEmittedMidi: null,
@@ -166,7 +173,10 @@ export class OnsetSegmenter {
     if (s.runMidi === midi) {
       // Continuation of the active run (no intervening silence reset it).
       s.runFrames += 1;
-      if (sample.clarity > s.runMaxClarity) s.runMaxClarity = sample.clarity;
+      if (sample.clarity > s.runMaxClarity) {
+        s.runMaxClarity = sample.clarity;
+        s.runBestFreqHz = sample.frequencyHz; // representative freq = clearest frame
+      }
     } else {
       // Start of a NEW pitch run (silence reset runMidi to null, or the pitch
       // changed). Decide if it should be SUPPRESSED as a short-gap continuation
@@ -180,6 +190,7 @@ export class OnsetSegmenter {
       s.runStartMs = sample.timeMs;
       s.runFrames = 1;
       s.runMaxClarity = sample.clarity;
+      s.runBestFreqHz = sample.frequencyHz; // first frame's freq is the best so far
       // A short-gap resume is pre-marked emitted so it never produces a 2nd note.
       s.runEmitted = isShortGapResumeOfSamePitch;
     }
@@ -193,6 +204,7 @@ export class OnsetSegmenter {
         midi,
         onsetMs: s.runStartMs, // back-dated to the attack frame
         clarity: s.runMaxClarity,
+        freqHz: s.runBestFreqHz, // representative fundamental (clearest frame)
       };
     }
     return null;
