@@ -234,6 +234,68 @@ describe('writing one completed line', () => {
     db.close();
   });
 
+  it('writes attempt + note_events inside an OUTER transaction (reentrant nesting)', () => {
+    // Reproduces the Electron main `attempt:write` handler, which wraps
+    // insertLineAttempt + insertNoteEvents in db.transaction(...). insertNoteEvents
+    // ALSO opens a transaction, so this NESTS — which threw "cannot start a
+    // transaction within a transaction" under node:sqlite until transaction() was
+    // made reentrant (nested calls use a SAVEPOINT). Regression guard for that bug.
+    const db = openInMemory();
+    const line = generateLine(CONFIG, 7, GENERATED_AT);
+    const expected = expectedFromLine(line);
+    const result = evaluateAttempt(expected, perfectTake(expected), {
+      tempoBpm: line.tempo,
+      subdivision: 'eighth',
+    });
+    insertSession(db, { id: 's', startedAt: 1, appVersion: 't', configSnapshot: CONFIG });
+    const write = db.transaction((): void => {
+      insertLineAttempt(db, {
+        id: 'a',
+        sessionId: 's',
+        lineIndexInSession: 0,
+        attemptType: 'first_read',
+        startedAt: 1,
+        completedAt: 2,
+        durationMs: 1,
+        line,
+        musicxml: serializeLineToMusicXML(line),
+        result,
+      });
+      insertNoteEvents(db, 'a', line, result);
+    });
+    expect(() => write()).not.toThrow();
+    expect(
+      (db.prepare(`SELECT COUNT(*) AS c FROM line_attempts`).get() as { c: number }).c,
+    ).toBe(1);
+    expect(getNoteEvents(db, 'a').length).toBe(
+      result.totalExpectedNotes + result.extra,
+    );
+    db.close();
+  });
+
+  it('nested transaction rolls back only its own savepoint on throw', () => {
+    const db = openInMemory();
+    db.exec('CREATE TABLE t (x INTEGER)');
+    const innerFails = db.transaction((): void => {
+      db.prepare(`INSERT INTO t VALUES (9)`).run();
+      throw new Error('boom');
+    });
+    const outer = db.transaction((): void => {
+      db.prepare(`INSERT INTO t VALUES (1)`).run();
+      try {
+        innerFails(); // its savepoint rolls back (the 9), outer continues
+      } catch {
+        /* swallowed: only the nested savepoint was undone */
+      }
+      db.prepare(`INSERT INTO t VALUES (2)`).run();
+    });
+    outer();
+    const xs = (db.prepare(`SELECT x FROM t ORDER BY x`).all() as Array<{ x: number }>)
+      .map((r) => r.x);
+    expect(xs).toEqual([1, 2]); // 9 was rolled back by the savepoint; 1 + 2 committed
+    db.close();
+  });
+
   it('stores denormalized dimension columns equal to the values inside line_json', () => {
     const db = openInMemory();
     const { line, attemptId } = writeCompletedAttempt(db);

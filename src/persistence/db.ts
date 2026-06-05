@@ -73,6 +73,9 @@ interface PragmaOptions {
  */
 export class Db {
   private readonly inner: DatabaseSync;
+  /** Nesting depth of active transactions, so transaction() is REENTRANT (a nested
+   *  call uses a SAVEPOINT instead of a second BEGIN, which SQLite forbids). */
+  private txDepth = 0;
 
   constructor(path: string) {
     this.inner = new DatabaseSync(path);
@@ -121,19 +124,36 @@ export class Db {
   }
 
   /**
-   * Wrap `fn` in a manual transaction and return a callable that runs it inside
-   * BEGIN/COMMIT, rolling back on any throw. Mirrors the prior driver's
-   * `db.transaction(fn)` (which returns a function you then call). node:sqlite has
-   * no transaction() helper, so we drive BEGIN/COMMIT/ROLLBACK by hand.
+   * Wrap `fn` in a manual transaction and return a callable that runs it, rolling
+   * back on any throw. Mirrors the prior driver's `db.transaction(fn)` (which returns
+   * a function you then call) — including its REENTRANCY: node:sqlite has no
+   * transaction() helper and a bare nested BEGIN throws "cannot start a transaction
+   * within a transaction", so a top-level call uses BEGIN/COMMIT while a nested call
+   * (e.g. insertNoteEvents running inside the attempt-write transaction) uses a
+   * SAVEPOINT, so transactions compose. Depth-keyed savepoint names are unique
+   * because calls are synchronous and strictly LIFO-nested.
    */
   transaction(fn: () => void): () => void {
     return (): void => {
-      this.inner.exec('BEGIN');
+      const depth = this.txDepth;
+      const sp = `sp_${depth}`;
+      if (depth === 0) this.inner.exec('BEGIN');
+      else this.inner.exec(`SAVEPOINT ${sp}`);
+      this.txDepth = depth + 1;
       try {
         fn();
-        this.inner.exec('COMMIT');
+        if (depth === 0) this.inner.exec('COMMIT');
+        else this.inner.exec(`RELEASE ${sp}`);
+        this.txDepth = depth;
       } catch (err) {
-        this.inner.exec('ROLLBACK');
+        if (depth === 0) {
+          this.inner.exec('ROLLBACK');
+        } else {
+          // Undo just this savepoint's work, then discard the savepoint.
+          this.inner.exec(`ROLLBACK TO ${sp}`);
+          this.inner.exec(`RELEASE ${sp}`);
+        }
+        this.txDepth = depth;
         throw err;
       }
     };
