@@ -29,7 +29,7 @@ import type { DetectedNote } from '../evaluation/index.js';
 export type DetectorKind = 'pitchy' | 'crepe';
 
 /** Default detector — pitchy, per the brief: CREPE is opt-in. */
-export const DEFAULT_DETECTOR_KIND: DetectorKind = 'pitchy';
+export const DEFAULT_DETECTOR_KIND: DetectorKind = 'crepe';
 
 /**
  * The minimal lifecycle the AudioGraph drives on either detector. LivePitchDetector
@@ -311,8 +311,9 @@ export class AudioGraph {
 
     const requested = this.opts.detector ?? DEFAULT_DETECTOR_KIND;
     if (requested === 'crepe') {
-      // Try CREPE; if its tfjs model fails to load at run start, fall back to
-      // pitchy so the take still works (brief: pitchy is the default + fallback).
+      // CREPE is the default detector (far more octave-robust on guitar than
+      // pitchy). If its tfjs model fails to load at run start, fall back to pitchy
+      // so the take still works — pitchy remains the always-available fallback.
       const crepe = new CrepeDetector(detectorOpts);
       try {
         await crepe.start(); // awaits the bundled tfjs model load + warmup
