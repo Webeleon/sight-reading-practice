@@ -246,6 +246,10 @@ export function useSightReading(
         const graph = new AudioGraph(ctx, {
           deviceId: inputDeviceId,
           onNote: (note: DetectedNote) => {
+            // Ignore detections during the count-in: the metronome clicks + string
+            // noise before the line starts are not part of the performance and would
+            // pollute evaluation + the review. Only the played line counts.
+            if (note.onsetMs < schedule.countInOffsetMs) return;
             detectedRef.current.push(note);
             setDetectedCount(detectedRef.current.length);
           },
@@ -386,7 +390,11 @@ export function useSightReading(
         // -> no frames, no recording (the review draws discrete points from the
         // detected notes and hides the audio player). The detected/expected arrays
         // are snapshotted so a later run can't mutate this payload.
-        const frames: DetectionFrame[] = graph ? graph.getFrames() : [];
+        // Frames during the count-in are dropped too, so the pitch-vs-time trace
+        // starts at the line, matching the gated detections.
+        const frames: DetectionFrame[] = graph
+          ? graph.getFrames().filter((f) => f.tMs >= schedule.countInOffsetMs)
+          : [];
         const detectedSnapshot = detectedRef.current.slice();
         const expectedSnapshot = expectedRef.current.slice();
         // Recording is null initially (and forever in synthetic mode); in live mode

@@ -27,7 +27,7 @@
 // table, the expected bars, the discrete detected points) still renders. A live
 // take has the continuous trace + the recording.
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { buildReviewModel, type ReviewRow } from '../../evaluation/index.js';
 import type { ReviewPayload } from '../useSightReading.js';
 import type { EvaluationResult } from '../../evaluation/index.js';
@@ -348,6 +348,7 @@ function RecordingPlayer({ blob }: { blob: Blob }): React.JSX.Element {
   // Create the object URL once per blob and REVOKE it on unmount / blob change so
   // we never leak. In-memory only — nothing is persisted.
   const [url, setUrl] = useState<string | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   useEffect(() => {
     const u = URL.createObjectURL(blob);
     setUrl(u);
@@ -360,11 +361,35 @@ function RecordingPlayer({ blob }: { blob: Blob }): React.JSX.Element {
     };
   }, [blob]);
 
+  // MediaRecorder WebM blobs carry no duration in their container, so a plain
+  // <audio> shows 0:00 / 0:00 and the seek bar is dead (it still PLAYS, but it
+  // looks broken). Force Chromium to compute the real duration: once metadata
+  // loads, if duration is Infinity/NaN, seek far past the end and reset to 0 — the
+  // browser then knows the true length and seeking works.
+  const forceDuration = useCallback((): void => {
+    const a = audioRef.current;
+    if (!a) return;
+    if (a.duration === Infinity || Number.isNaN(a.duration)) {
+      const onTimeUpdate = (): void => {
+        a.removeEventListener('timeupdate', onTimeUpdate);
+        a.currentTime = 0;
+      };
+      a.addEventListener('timeupdate', onTimeUpdate);
+      a.currentTime = 1e101; // seek absurdly far -> browser clamps + learns duration
+    }
+  }, []);
+
   return (
     <section className="review-section review-audio">
       <h4>Recording</h4>
       {url ? (
-        <audio controls src={url} className="review-audio-player">
+        <audio
+          ref={audioRef}
+          controls
+          src={url}
+          onLoadedMetadata={forceDuration}
+          className="review-audio-player"
+        >
           Your browser does not support inline audio playback.
         </audio>
       ) : (
