@@ -31,12 +31,21 @@ import {
   synthesizePerfectTake,
   synthesizeKnownErrorTake,
 } from './evaluationBridge.js';
-import type { DetectedNote } from '../evaluation/index.js';
+import type { DetectedNote, EvaluationResult } from '../evaluation/index.js';
 import {
   DEFAULT_UI_CONFIG,
   generateFreshLine,
+  toLineConfig,
   type UiConfig,
 } from './lineConfig.js';
+import { StatsView } from './views/StatsView.js';
+import {
+  startSession,
+  endSession,
+  writeCompletedAttempt,
+  persistenceAvailable,
+  newId,
+} from './sessionBridge.js';
 // appConfig.ts owns the global `Window.sightReading` declaration (it adds the
 // `config` IPC member); importing it keeps a single source of truth for the type.
 import './appConfig.js';
@@ -44,9 +53,13 @@ import './appConfig.js';
 const COUNT_IN_BARS = 1;
 const RETRY_SLOWER_FACTOR = 0.7; // retry_slower tempo = 70% of configured tempo
 
+/** Which top-level screen is showing (brief M5: switch practice <-> stats). */
+type AppView = 'practice' | 'stats';
+
 export function App(): React.JSX.Element {
   const bridge = typeof window !== 'undefined' ? window.sightReading : undefined;
 
+  const [view, setView] = useState<AppView>('practice');
   const [uiConfig, setUiConfig] = useState<UiConfig>(DEFAULT_UI_CONFIG);
   const [line, setLine] = useState<Line | null>(null);
   const [inputDeviceId, setInputDeviceId] = useState<string | undefined>(undefined);
@@ -59,6 +72,26 @@ export function App(): React.JSX.Element {
 
   const cursorHandleRef = useRef<CursorHandle | null>(null);
   const [cursorReady, setCursorReady] = useState(false);
+
+  // --- Session-loop persistence (Milestone 5) ------------------------------
+  // One sessions row per app run: started on mount, ended on unmount / quit. Each
+  // COMPLETED attempt writes one line_attempts row + its note_events via IPC. The
+  // renderer never touches better-sqlite3 — sessionBridge.ts round-trips to the
+  // main-process DB and is a graceful no-op outside Electron (browser preview).
+  const sessionIdRef = useRef<string | null>(null);
+  // Monotonic line_index_in_session, bumped per persisted attempt.
+  const lineIndexRef = useRef(0);
+  // epoch-ms when the in-flight run's musical time began (set at beginRun); paired
+  // with completedAt at persist time to compute duration_ms.
+  const runStartedAtRef = useRef(0);
+  // The exact Line the in-flight run is reading (retry_slower runs a tempo-shifted
+  // copy), captured at beginRun so persistence stores the line that was actually
+  // played rather than whatever `line` state happens to be at finalize.
+  const runLineRef = useRef<Line | null>(null);
+  // The result object already persisted, so the finalize-watching effect writes
+  // each attempt exactly once (result is a new object per run).
+  const persistedResultRef = useRef<EvaluationResult | null>(null);
+  const [persistenceOn] = useState<boolean>(() => persistenceAvailable());
 
   const {
     phase,
@@ -83,6 +116,65 @@ export function App(): React.JSX.Element {
     setLine(generateFreshLine(DEFAULT_UI_CONFIG));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Begin a session on mount; end it on unmount (the main process ALSO ends any
+  // still-open session on before-quit, covering a hard Cmd+Q). The configSnapshot
+  // is the generator LineConfig the session started with.
+  useEffect(() => {
+    const id = newId();
+    sessionIdRef.current = id;
+    void startSession(id, toLineConfig(DEFAULT_UI_CONFIG)).then((ack) => {
+      console.log(
+        `[UI] session ${id} started (persisted=${ack.persisted}` +
+          `${ack.persisted ? '' : ' — persistence disabled'})`,
+      );
+    });
+    // Best-effort end on window close (renderer-driven; main has a backstop).
+    const onBeforeUnload = (): void => {
+      if (sessionIdRef.current) void endSession(sessionIdRef.current);
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      if (sessionIdRef.current) {
+        void endSession(sessionIdRef.current);
+        sessionIdRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist each COMPLETED attempt exactly once. When the read-AND-evaluate hook
+  // finishes a run it produces a fresh `result` object; we write one line_attempts
+  // row (+ note_events) for it, keyed off the run we captured in runLineRef. Only
+  // first_read counts toward fluency — but ALL three attempt_types are PERSISTED
+  // (the fluency rule is enforced in the stats QUERIES, not at write time;
+  // brief section 11).
+  useEffect(() => {
+    if (phase !== 'finished' || result === null) return;
+    if (persistedResultRef.current === result) return; // already wrote this run
+    const runLine = runLineRef.current;
+    const sessionId = sessionIdRef.current;
+    if (!runLine || !sessionId) return;
+    persistedResultRef.current = result;
+    const index = lineIndexRef.current++;
+    void writeCompletedAttempt({
+      sessionId,
+      lineIndexInSession: index,
+      attemptType,
+      startedAt: runStartedAtRef.current,
+      completedAt: Date.now(),
+      line: runLine,
+      result,
+    }).then((ack) => {
+      console.log(
+        `[UI] attempt #${index} (${attemptType}) persisted=${ack.persisted} ` +
+          `pitch=${(result.pitchAccuracy * 100).toFixed(0)}% ` +
+          `timing=${(result.timingAccuracy * 100).toFixed(0)}% ` +
+          `expected=${result.totalExpectedNotes} extra=${result.extra}`,
+      );
+    });
+  }, [phase, result, attemptType]);
 
   const handleNextLine = useCallback((): void => {
     stop();
@@ -110,6 +202,10 @@ export function App(): React.JSX.Element {
           timingJitterMs: 25,
         });
       }
+      // Capture the exact line + start time for THIS run so persistence records the
+      // line that was actually played (retry_slower runs a tempo-shifted copy).
+      runLineRef.current = runLine;
+      runStartedAtRef.current = Date.now();
       start(type, { line: runLine, syntheticTake: take });
     },
     [syntheticMode, syntheticAccuracy, start],
@@ -158,8 +254,10 @@ export function App(): React.JSX.Element {
     beginRun('retry_slower', slower); // run the modified line immediately
   }, [line, beginRun]);
 
-  // Keyboard transport: Enter => Next line, Space => Start (if idle).
+  // Keyboard transport: Enter => Next line, Space => Start (if idle). Inactive on
+  // the stats screen (no transport there).
   useEffect(() => {
+    if (view !== 'practice') return;
     const onKey = (e: KeyboardEvent): void => {
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
@@ -173,26 +271,14 @@ export function App(): React.JSX.Element {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleNextLine, handleStart, isRunning]);
+  }, [handleNextLine, handleStart, isRunning, view]);
 
   const showResults = phase === 'finished' && result !== null;
 
-  return (
-    <main className="app-shell read-along">
-      <header className="app-header">
-        <div>
-          <h1>Sight Reading</h1>
-          <p className="subtitle">
-            Milestone 4 — pitch detection · evaluation · feedback
-          </p>
-        </div>
-        <p className="env-line">
-          {bridge?.isElectron
-            ? `Electron ${bridge.versions.electron} · Chromium ${bridge.versions.chrome}`
-            : 'Browser preview (outside Electron)'}
-        </p>
-      </header>
-
+  // Practice body kept as an element value (not a nested component) so toggling
+  // the view does not remount the read-along hooks/refs.
+  const practiceBody = (
+    <>
       <HeadphoneTip />
 
       <section className="transport">
@@ -322,6 +408,17 @@ export function App(): React.JSX.Element {
       <section className="phase-line">
         Phase: <strong>{phase}</strong>
         {line ? ` · ${line.tempo} BPM · ${line.notes.length} notes` : ''}
+        {' · '}
+        <span
+          className="persist-status"
+          title={
+            persistenceOn
+              ? 'Completed attempts are saved to the SQLite DB (Electron main process).'
+              : 'Persistence is off (browser preview, or better-sqlite3 ABI mismatch — run npm run rebuild:electron).'
+          }
+        >
+          saving: <strong>{persistenceOn ? 'on' : 'off'}</strong>
+        </span>
       </section>
 
       {showResults && line && result && (
@@ -334,6 +431,46 @@ export function App(): React.JSX.Element {
           onRetrySlower={handleRetrySlower}
         />
       )}
+    </>
+  );
+
+  return (
+    <main className="app-shell read-along">
+      <header className="app-header">
+        <div>
+          <h1>Sight Reading</h1>
+          <p className="subtitle">
+            Milestone 5 — persistence · session loop · stats
+          </p>
+        </div>
+        <nav className="view-switch" aria-label="View">
+          <button
+            className={'btn btn-small' + (view === 'practice' ? ' is-active' : '')}
+            onClick={() => setView('practice')}
+            aria-pressed={view === 'practice'}
+          >
+            Practice
+          </button>
+          <button
+            className={'btn btn-small' + (view === 'stats' ? ' is-active' : '')}
+            onClick={() => setView('stats')}
+            aria-pressed={view === 'stats'}
+          >
+            Stats
+          </button>
+        </nav>
+        <p className="env-line">
+          {bridge?.isElectron
+            ? `Electron ${bridge.versions.electron} · Chromium ${bridge.versions.chrome}`
+            : 'Browser preview (outside Electron)'}
+        </p>
+      </header>
+
+      {/* Keep the practice body MOUNTED while on stats (hidden) so the read-along
+          hooks/refs/audio graph survive a tab switch; only stats is conditionally
+          mounted. */}
+      <div hidden={view !== 'practice'}>{practiceBody}</div>
+      {view === 'stats' && <StatsView />}
     </main>
   );
 }

@@ -6,17 +6,22 @@
   "description": "Throwaway Electron+TypeScript prototype for a guitar sight-reading practice tool",
   "main": "dist-electron/main/main.mjs",
   "scripts": {
+    "predev": "npm run rebuild:electron",
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "prepreview": "npm run rebuild:electron",
     "preview": "electron-vite preview",
     "test": "vitest run",
     "verify": "vitest run && npm run verify:property && npm run typecheck && npm run verify:purity",
     "typecheck": "tsc -p tsconfig.pure.json --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.ui.json --noEmit",
     "verify:purity": "bash scripts/check-purity.sh",
     "verify:property": "vitest run src/generator/property.test.ts",
-    "generate:batch": "node --import tsx src/cli/generateBatch.ts"
+    "generate:batch": "node --import tsx src/cli/generateBatch.ts",
+    "rebuild:electron": "electron-rebuild -f -w better-sqlite3",
+    "rebuild:node": "npm rebuild better-sqlite3"
   },
   "dependencies": {
+    "better-sqlite3": "^12.10.0",
     "opensheetmusicdisplay": "^1.9.9",
     "pitchy": "^4.1.0",
     "react": "^19.2.7",
@@ -24,6 +29,8 @@
     "seedrandom": "^3.0.5"
   },
   "devDependencies": {
+    "@electron/rebuild": "^4.0.4",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.9.1",
     "@types/react": "^19.2.16",
     "@types/react-dom": "^19.2.3",

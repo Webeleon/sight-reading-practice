@@ -16,10 +16,66 @@ interface ConfigBridge {
   set: (patch: AppConfig) => Promise<AppConfig>;
 }
 
+/** attempt_type values (brief sections 11/13). */
+export type AttemptType = 'first_read' | 'retry_at_tempo' | 'retry_slower';
+
+/** Whether a write actually hit the DB (false = persistence disabled). */
+export interface PersistAck {
+  persisted: boolean;
+}
+
+/** Start-session payload (mirrors electron/preload.ts StartSessionPayload). */
+export interface StartSessionPayload {
+  id: string;
+  configSnapshot: unknown;
+}
+
+/** Completed-attempt payload (mirrors electron/preload.ts WriteAttemptPayload).
+ *  `line` / `result` are the renderer's own typed objects, passed through as the
+ *  bridge keeps them opaque. */
+export interface WriteAttemptPayload {
+  id: string;
+  sessionId: string;
+  lineIndexInSession: number;
+  attemptType: AttemptType;
+  parentAttemptId?: string | null;
+  startedAt: number;
+  completedAt: number;
+  durationMs: number;
+  line: unknown;
+  musicxml: string;
+  result: unknown;
+}
+
+/** Save-preset payload (mirrors electron/preload.ts SavePresetPayload). */
+export interface SavePresetPayload {
+  id: string;
+  name: string;
+  config: unknown;
+}
+
+/** The session-loop WRITE surface exposed by the preload (Milestone 5). */
+interface SessionBridge {
+  start: (payload: StartSessionPayload) => Promise<PersistAck>;
+  end: (id: string) => Promise<PersistAck>;
+  writeAttempt: (payload: WriteAttemptPayload) => Promise<PersistAck>;
+}
+
+/** The preset save/load surface exposed by the preload (Milestone 5). */
+interface PresetsBridge {
+  save: (payload: SavePresetPayload) => Promise<PersistAck>;
+  load: (id: string) => Promise<unknown | null>;
+  list: () => Promise<unknown[]>;
+  use: (id: string) => Promise<unknown | null>;
+  remove: (id: string) => Promise<{ deleted: boolean }>;
+}
+
 interface SightReadingBridge {
   isElectron: boolean;
   versions: { electron: string; chrome: string; node: string };
   config?: ConfigBridge;
+  session?: SessionBridge;
+  presets?: PresetsBridge;
 }
 
 declare global {

@@ -32,7 +32,16 @@ export default defineConfig({
         // runs at load time looking for path.txt next to the bundle (it isn't there) and
         // throws "Electron failed to install correctly". Keep electron external so the
         // electron runtime resolves its built-in module instead.
-        external: ['electron'],
+        //
+        // better-sqlite3 is a NATIVE module: its JS wrapper uses the `bindings`
+        // package to locate better_sqlite3.node by walking up from its own
+        // node_modules dir. If it (and `bindings`) get BUNDLED, those relative
+        // lookups break and the .node binary is never found at runtime. It IS a
+        // package.json dependency so externalizeDepsPlugin() should externalize it,
+        // but it leaked into the dynamically-imported persistence chunk — so we
+        // pin it (and `bindings`) external explicitly to be certain it resolves
+        // from node_modules at runtime against the Electron ABI.
+        external: ['electron', 'better-sqlite3', 'bindings'],
         input: { main: resolve(__dirname, 'electron/main.ts') },
         output: { format: 'es', entryFileNames: '[name].mjs' },
       },

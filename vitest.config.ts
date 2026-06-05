@@ -19,7 +19,10 @@ export default defineConfig({
         test: {
           name: { label: 'node', color: 'green' },
           environment: 'node',
-          include: ['src/**/*.test.ts'],
+          // src/** holds the per-module unit tests; tests/** holds the scripted
+          // end-to-end test (brief section 15), which exercises generator ->
+          // evaluation -> persistence end to end against an in-memory DB.
+          include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
           exclude: ['src/**/*.dom.test.ts', '**/node_modules/**'],
         },
       },

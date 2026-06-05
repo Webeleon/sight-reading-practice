@@ -1536,3 +1536,226 @@ state (cursorIndexRef=-1) hits the `else if (cur < 0) cur = 0` branch and runs t
 `while (cur < keepIndex)` guard, so keepIndex=0 also stays on entry 0. In the tick loop
 `moveTo` runs BEFORE `commitTrailingColors` each frame, so `keepIndex` always reflects the
 just-set index. No path advances the cursor past its logical index after a reset.
+
+## Milestone 5 — SQLite persistence schema + DAO layer (`src/persistence`)
+
+The schema in `src/persistence/migrations/001_initial.sql` is a FAITHFUL, verbatim copy of
+brief section 11 — four tables (sessions, line_attempts, note_events, presets), every column,
+type, FK, and CREATE INDEX exactly as written. This file is the single most important
+transferable artifact (it goes straight into the Swift rewrite). DO NOT edit it; future
+schema changes get a NEW numbered migration (002_*.sql). Tests assert all four tables and
+all ten named indexes exist via `sqlite_master`.
+
+**`attempt_type` is data, not schema.** The values `first_read | retry_at_tempo |
+retry_slower` are stored verbatim in a TEXT column. The "only `first_read` contributes to
+fluency metrics" rule is enforced in QUERIES (e.g. stats `WHERE attempt_type='first_read'`),
+NOT by a CHECK constraint or a separate table — brief section 11 is explicit about this.
+
+**Denormalized dimension columns are DERIVED from the Line, never passed in.**
+`lineAttempts.deriveDimensions(line)` projects the flat columns (key_tonic, key_mode,
+time_signature, position_*, bar_count, tempo_configured, phrase_structure, progression_id,
+rhythmic_motif_id) out of the Line so they can NEVER drift from `line_json`. A test re-parses
+the stored `line_json`, re-derives the dimensions, and asserts column == derivation, then
+also asserts against the original in-memory Line. Mapping notes:
+  - `key_tonic` is the pretty glyph spelling (`F#`, `Bb`), keeping enharmonic keys DISTINCT.
+  - `time_signature` is `"beats/beatUnit"` (e.g. `"4/4"`).
+  - `position_label` is nullable (the Line's optional `position.label`); `position_fret_low/high`
+    come from `position.fretRange`.
+  - `rhythmic_motif_id` is `rhythmicMotifPlan.perBarMotifIds[0]` — the plan has ONE motif per
+    bar but the schema has ONE column, so we store the first bar's motif as the representative.
+  - `phrase_structure` is `phraseStructure.pattern` (AAAB/ABAB/ABAC/throughComposed).
+
+**`note_events`: one row per EXPECTED note, plus extras with NULL `expected_*`.** The pure
+`EvaluationResult.notes` array is already shaped for this: one `NoteResult` per expected note
+(in expected order, `noteIndex` set) followed by the extra rows (`noteIndex` null,
+classification `'extra'`). Iterating it produces precisely the schema's row set. Per-note
+EXPECTED dimension fields (bar_index, is_strong_beat, implied_chord_root/quality,
+chord_tone_role, expected_onset_tick, expected_pitch_name, interval_from_previous_*) are
+joined from `line.notes[noteIndex]`; detected/classification fields come from the NoteResult.
+Extras get every `expected_*` set to NULL and `note_index` = the extra's ordinal among extras.
+The interval columns are computed in-persistence from domain primitives (`intervalBetween` +
+signed MIDI delta) so persistence does NOT import the generator. The ms columns are INTEGER,
+so fractional onset/duration ms are `Math.round`ed at insert.
+
+**DI seam.** `db.ts` exposes `openDatabase(path, migrationsDir?)` and `openInMemory()`; every
+DAO takes the `Database` as its first arg and never opens its own connection. Tests open an
+in-memory DB per test and pass it in. Migrations are tracked via `PRAGMA user_version` (a
+file `NNN_*.sql` applies iff NNN > user_version, then bumps it), each inside a transaction;
+re-running is a no-op (idempotency tested). `foreign_keys = ON` is set on every connection so
+the schema's FKs are enforced (an orphan `line_attempts.session_id` insert throws — tested).
+
+### NATIVE MODULE ABI — the load-bearing gotcha
+
+`better-sqlite3` is a NATIVE module. After `npm install` it builds for the **NODE ABI**, which
+is why the persistence layer is unit-testable under **vitest** (vitest runs on node) with NO
+rebuild. The Electron RUNTIME needs the **ELECTRON ABI** instead. Rules that keep both working:
+
+  - **Do NOT run `electron-rebuild` during test/verify work** — it switches better-sqlite3 to
+    the Electron ABI and then `npm run verify` (vitest) can't load it.
+  - npm scripts added: `rebuild:electron` (`electron-rebuild -f -w better-sqlite3`) and
+    `rebuild:node` (`npm rebuild better-sqlite3`). `predev`/`prepreview` run `rebuild:electron`
+    automatically so launching the app gets the Electron ABI without thinking about it.
+  - **After running the app, run `npm run rebuild:node` before `npm run verify` again** —
+    otherwise vitest fails to load the now-Electron-ABI binary. This is the one manual step.
+  - Installed `@types/better-sqlite3` (devDependency) — better-sqlite3 12.x ships NO bundled
+    types, so `tsconfig.node` typecheck needs them. `src/persistence` is in tsconfig.node and
+    in the no-`any` set; `db.ts` re-exports `Database.Database` as `Db` so DAOs annotate
+    without importing better-sqlite3 directly.
+
+**Electron main: lazy + graceful DB init.** `electron/main.ts` opens the DB LAZILY via a
+guarded `getDb()` that `await import()`s the persistence module inside try/catch. If
+better-sqlite3 fails to load (ABI mismatch because the app wasn't electron-rebuilt), it
+CATCHES the error, logs a clear `[DB]` warning telling the user to run
+`npm run rebuild:electron`, sets `db = null` (persistence DISABLED), and the app still LAUNCHES
+and runs read-along. A `db:status` IPC reports availability; `before-quit` closes the DB.
+
+**externalization bug FOUND BY INSPECTING THE BUILD (not by tests).** The brief said
+`externalizeDepsPlugin()` externalizes dependencies (which better-sqlite3 is), but it LEAKED
+INTO the dynamically-imported persistence chunk: the first `npm run build` bundled
+better-sqlite3's JS wrapper AND the `bindings` package (which locates `better_sqlite3.node`
+by walking up from its own `node_modules` dir). Bundled, those relative `.node` lookups break
+at runtime and the native binary is never found. Fix: pin `better-sqlite3` and `bindings` in
+the main build's `rollupOptions.external` explicitly (the config already did this for
+`electron` for a similar reason). After the fix the chunk dropped from 35.2 kB to 4.5 kB and
+contains just `import Database from "better-sqlite3"` with zero bundled wrapper/bindings code.
+LESSON: for native modules, do not trust externalizeDepsPlugin alone — grep the built chunk
+for `node_modules/<native-pkg>` and the `bindings` shim to confirm it was externalized.
+
+**Migrations dir at runtime.** `runMigrations(db, migrationsDir?)` defaults to the
+`migrations/` folder co-located with `db.ts` (correct under vitest/tsx where import.meta.url
+is the source file). When bundled into the Electron main chunk, import.meta.url points at the
+bundle, so `main.ts` passes an explicit dir resolved from candidate paths (app path /
+process.cwd / module-relative) pointing at `src/persistence/migrations`. Packaging is out of
+scope (the prototype is never packaged), so the dev/source layout is sufficient.
+
+## Milestone 5 — stats queries + views
+
+**Fluency rule lives in the QUERIES, not the schema (brief section 11).** `src/persistence/stats.ts`
+holds the two stats queries; both filter `attempt_type = 'first_read'` so `retry_at_tempo` /
+`retry_slower` rows are EXCLUDED from every fluency figure. The retries are still stored verbatim in
+`line_attempts` — they are simply omitted from the accuracy series and the missed-note heatmap. A
+single module-level `const FIRST_READ = 'first_read'` is the only place the magic string appears, so
+the filter cannot be mistyped between queries. Tests assert that seeded retries with perfect (1.0)
+metrics never move the numbers.
+
+**The two queries:**
+- `accuracyOverTime(db, filter?)` -> `AccuracyPoint[]` (time-ordered ascending by `started_at`).
+  Filterable by key (`keyTonic` + `keyMode`, matched on the denormalized columns so enharmonic keys
+  stay DISTINCT — F# minor != Gb minor) and position (`positionFretLow` + `positionFretHigh`, the
+  same dimension `idx_attempts_position` indexes), plus optional `sessionId`. Excludes attempts with
+  NULL `pitch_accuracy` (abandoned) so a view never plots a null point.
+- `missedNoteHeatmap(db, filter?)` -> `PitchHeatmapBucket[]` grouped by `expected_midi` (the staff
+  cell), with per-classification counts (`hits`/`missed`/`wrongPitch`/`late`/`total`) and a derived
+  `missRate = (missed + wrongPitch) / total`. `late` is NOT counted as a miss (pitch was eventually
+  right). EXTRA events (`expected_midi IS NULL`) are excluded — they have no staff position. The
+  JOIN to `line_attempts` both enforces first_read AND lets the heatmap honour the same key/position
+  filter as the series. Two helper queries (`availableKeys` / `availablePositions`) feed the filter
+  dropdowns so they only offer dimensions that actually have first_read data.
+- `expected_pitch_name` per MIDI is chosen by a correlated subquery picking the MOST-COMMON spelling
+  (ORDER BY COUNT(*) DESC) rather than MAX(), so the displayed name is representative, not
+  alphabetically-last.
+
+**IPC: renderer never touches better-sqlite3.** Channels registered in `electron/main.ts`
+(`registerStatsIpc`) and exposed on `window.sightReading.stats` in `electron/preload.ts`:
+`stats:accuracyOverTime`, `stats:missedNoteHeatmap`, `stats:availableKeys`,
+`stats:availablePositions`. Each main-process handler lazily resolves the DB via the existing guarded
+`getDb()` and `await import('../src/persistence/index.js')`, and returns `[]` when persistence is
+disabled (ABI mismatch / not yet rebuilt) so the stats view degrades gracefully instead of throwing.
+`src/ui/statsBridge.ts` is the renderer-side typed accessor; it DUPLICATES the result interfaces
+(does not import them from `src/persistence`) on purpose — importing from persistence would drag the
+native module into the renderer tsconfig. The persistence tests are the single source of truth that
+the shapes match.
+
+**View switch (brief M5: at least two views).** `src/ui/views/StatsView.tsx` renders both views: an
+SVG line chart for accuracy-over-time (pitch=green, timing=blue) with key+position filter dropdowns,
+and a per-pitch missed-note heatmap (green->red by miss rate, high pitch at the top like a staff).
+`App.tsx` adds a Practice/Stats nav in the header. The practice body is kept MOUNTED-but-hidden
+(`<div hidden>`) while on the stats tab so the read-along hooks/refs/audio graph survive a tab switch;
+only the StatsView is conditionally mounted. The keyboard transport (Enter/Space) is disabled on the
+stats screen.
+
+**Build note for native externalization (re-confirmed).** Adding stats.ts grew the dynamically-
+imported persistence chunk from 4.5 kB to 25.27 kB, but that is just the SQL/DAO SOURCE — `grep` of
+`dist-electron/main/chunks/persistence-*.js` still shows ZERO `node_modules/better-sqlite3` or
+`node_modules/bindings` paths and a single `import ... from "better-sqlite3"`, so the native module
+is still correctly externalized. Chunk SIZE is not the externalization signal; the absence of
+bundled `node_modules/<native-pkg>` paths is.
+
+**Reminder (native ABI):** this work was done WITHOUT running `electron-rebuild`, so better-sqlite3
+stayed on the NODE ABI and `npm run verify` (vitest under node) is green. After running the Electron
+app (`npm run dev`/`preview`, whose predev/prepreview run `electron-rebuild`), you MUST
+`npm run rebuild:node` before `npm run verify` again, or the persistence/stats tests will fail to
+load the native module.
+
+## Milestone 5 — session-loop wiring + scripted e2e (persistence integrated into the running app)
+
+This round wired persistence into the running treadmill and added the brief-section-15 scripted
+end-to-end test. The schema (`migrations/001_initial.sql`), the DAOs (`sessions`/`lineAttempts`/
+`noteEvents`/`presets`), and the stats queries/views already existed; what was missing was the
+session-loop WRITE path (the read side — stats — was already wired) and the e2e test.
+
+**Session-loop WRITE IPC (electron/main.ts + preload.ts).** Added three handler groups beside the
+existing config/db/stats IPC, all following the SAME graceful-degradation pattern: lazily resolve the
+DB via the guarded `getDb()` + cached dynamic `import('../src/persistence/index.js')`, and return a
+sentinel (`{ persisted:false }` / `null` / `[]`) instead of throwing when persistence is disabled.
+  - `session:start` (renderer owns the UUID + config snapshot; MAIN stamps `started_at`=Date.now()
+    and `app_version`=`app.getVersion()` — never trust the renderer's clock/version for those),
+  - `session:end` (stamps `ended_at`),
+  - `attempt:write` (ONE round-trip writes the line_attempts row AND its note_events, wrapped in a
+    `db.transaction()` so a failure can't half-write),
+  - `preset:save|load|list|use|delete`.
+The renderer NEVER imports better-sqlite3 or the DAOs; `src/ui/sessionBridge.ts` is the typed
+accessor (mirrors `statsBridge.ts`): it serializes the Line to MusicXML on the renderer side (the
+schema's `musicxml` column), computes `duration_ms`, and passes the Line + EvaluationResult through as
+plain JSON (both are JSON.stringify-round-trip-safe by design — `domain/line.ts`). The MAIN process
+derives the denormalized line_attempts dimension columns from the Line (via `deriveDimensions`) so the
+renderer never duplicates that projection logic and the dims can't drift from `line_json`.
+
+**Session lifecycle = one sessions row per app run.** `App.tsx` starts a session in a mount effect
+and ends it in the cleanup + a `beforeunload` listener. The MAIN process has a BACKSTOP: it tracks
+`activeSessionId` (set on `session:start`, cleared on `session:end`) and, in `before-quit` (which is
+SYNCHRONOUS — it can't `await getDb()`/`loadStats()`), uses the already-open `db` handle + the cached
+`persistenceModule` reference to stamp `ended_at` on a still-open session. That covers a hard Cmd+Q
+mid-attempt. This is why `loadStats()` now caches the imported module in `persistenceModule` rather
+than re-importing each call.
+
+**StrictMode dev caveat (KNOWN, benign).** `main.tsx` wraps `<App>` in `<React.StrictMode>`, so in
+DEV the session mount-effect runs twice (mount → cleanup → mount). The first session is started and
+immediately ended with zero attempts, then the real session begins — i.e. one empty `sessions` row
+per launch in dev. Production builds don't double-invoke, the `before-quit` backstop guarantees a
+clean `ended_at`, and `endSession` is an idempotent UPDATE so the double-end is harmless. Not worth a
+guard for throwaway code; the Swift app won't have this React-specific artifact.
+
+**Persist each completed attempt EXACTLY once.** A mount-stable `persistedResultRef` compares against
+the `result` OBJECT identity (the hook produces a fresh EvaluationResult per run), so the
+finalize-watching effect writes one row per run and never re-writes on an unrelated re-render. The
+exact Line that was read is captured in `runLineRef` at `beginRun` time (NOT read from `line` state at
+finalize) because `retry_slower` runs a tempo-shifted COPY of the line — persistence must store the
+line that was actually played. ALL THREE attempt_types are PERSISTED; the "only first_read counts
+toward fluency" rule is enforced in the stats QUERIES (`stats.ts`), never at write time (brief §11).
+
+**Scripted e2e test (`tests/e2e.persistence.test.ts`, brief §15).** Runs under vitest's node project
+against an in-memory DB (the DI seam `openInMemory()`): start a session → `generateLine` → build
+ExpectedNote[] from the Line (using domain `pitchToMidi`, rests filtered) + a SYNTHETIC detected
+sequence engineered to surface every classification (wrong_pitch/late/missed/hit + 2 extras) →
+`evaluateAttempt` → `insertSession`/`insertLineAttempt`/`insertNoteEvents` → assert exactly 1 session
+row, 1 attempt row, `(expected + extra)` note_events rows, AND that the STORED `pitch_accuracy`/
+`timing_accuracy`/count columns equal the EvaluationResult's. A second case writes a first_read + a
+retry_slower and asserts both rows persist but only one is `first_read`. The `late` detection offset
+is derived from the SAME `toleranceWindow(tempo, subdivision)` evaluation uses (`lateMs + symmetricMs`
+= 2.4·W, inside the aligner's 3·W search horizon) so it classifies `late` (not dropped as `extra`) at
+any tempo/grid — the brittle alternative (a hard-coded ms offset) would mis-classify at other tempos.
+
+**vitest glob: `tests/**` was NOT covered.** The vitest node project only globbed `src/**/*.test.ts`;
+the brief names the e2e file `tests/e2e.persistence.test.ts`. Extended the node project's `include` to
+`['src/**/*.test.ts','tests/**/*.test.ts']` (and added `tests` to `tsconfig.node.json` include so it
+typechecks under the node/no-DOM config). `npm run verify` now picks it up automatically — no separate
+`verify:e2e` script needed. (Test count went 372 → 374.)
+
+**Confirmed end to end.** `npm run verify` green (374 unit + property + typecheck pure/node/ui +
+purity). `npm run build` green: the dynamically-imported persistence chunk still shows a single
+`import Database from "better-sqlite3"` (externalized, NOT bundled — no `node_modules/better-sqlite3`
+or `node_modules/bindings` paths), and the built `main.mjs`/`preload.mjs` expose all 8 new IPC
+channels (`session:start|end`, `attempt:write`, `preset:save|load|list|use|delete`). Done WITHOUT
+electron-rebuild, so better-sqlite3 stayed on the node ABI and verify is green; after running the app
+you must `npm run rebuild:node` before `npm run verify` again.
