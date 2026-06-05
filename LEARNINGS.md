@@ -1356,3 +1356,20 @@ edge or the 0.5 alpha distracts, the gradient stops in `.osmd-readahead-dim` and
 `frac` mapping in useSightReading are the two knobs — consider dimming only a fixed
 number of notes behind the cursor rather than the whole read region if the full-width
 wash feels heavy on long lines.
+
+## Milestone 4 — GATE 3 live verification (orchestrator, headless Chromium, synthetic takes)
+
+Live pitch detection needs a guitar (Gate 3), but the evaluation pipeline + real-time
+feedback + results screen were exercised hardware-free via the built-in synthetic-take
+harness, served statically and driven with Playwright in Chromium:
+
+- "Simulate perfect take": Results = 100% pitch / 100% timing, 10 hit / 0 wrong / 0 late / 0 missed / 0 extra; all noteheads coloured green (#1faa59). attempt_type=first_read.
+- "Simulate take with errors": Results = 70% pitch / 60% timing, breakdown 6 hit / 2 wrong / 1 late / 1 missed / 1 extra. Independently consistent: pitch=(6+1)/10=70%, timing=6/10=60% (timing < pitch because `late` counts for pitch but not timing). Staff showed all three feedback states — green hit, red wrong-pitch (#e03131), grey missed (#9aa0a6).
+- Results screen matches brief section 13: pitch% + formula, timing% + formula, per-class counts, config summary (key / position / bars / tempo), and the three priority-ordered actions (Next line [primary, Enter] / Retry at tempo / Retry slower).
+
+So the autonomously-verifiable M4 criteria are confirmed in the real UI, not just unit
+tests. STILL OPEN for the human at Gate 3 (need guitar + audio interface): real device
+enumeration/persistence, live pitch-detection stability on clean notes, the CREPE
+escalation decision, and the subjective feedback-UX feel. The clarity threshold (0.6),
+BASE_ONSET_TOLERANCE_MS (90), and measured round-trip latency placeholders in this file
+must be calibrated at that gate.
