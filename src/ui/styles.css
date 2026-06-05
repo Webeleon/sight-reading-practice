@@ -212,6 +212,24 @@ body {
   color: var(--muted);
 }
 
+/* Detector A/B picker (pitchy | CREPE) — disabled while a take runs. */
+.detector-picker {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--muted);
+}
+.detector-picker select {
+  font: inherit;
+}
+.detector-fallback {
+  color: #f08c00; /* warn amber: CREPE fell back to pitchy this take */
+}
+.review-detector {
+  color: var(--text, inherit);
+}
+
 .osmd-wrap {
   position: relative;
 }

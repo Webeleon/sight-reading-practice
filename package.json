@@ -17,6 +17,7 @@
     "generate:batch": "node --import tsx src/cli/generateBatch.ts"
   },
   "dependencies": {
+    "@tensorflow/tfjs": "^4.22.0",
     "opensheetmusicdisplay": "^1.9.9",
     "pitchy": "^4.1.0",
     "react": "^19.2.7",

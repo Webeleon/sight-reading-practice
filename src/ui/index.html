@@ -2,10 +2,21 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- Lock down what the renderer can do; loosen later if a CDN/resource needs it. -->
+    <!--
+      Lock down what the renderer can do; kept as tight as possible.
+      script-src adds 'unsafe-eval' (and 'wasm-unsafe-eval') ONLY for TensorFlow.js
+      (the CREPE detector): tfjs generates kernels/shaders via new Function()/eval at
+      runtime on BOTH its webgl (renderer default) and cpu backends, so under a plain
+      script-src 'self' it throws "EvalError: 'unsafe-eval' is not an allowed source
+      of script" during module init. The CREPE model.json + weight shards load
+      same-origin from the bundled src/ui/public/models/crepe/ (no CDN), so they are
+      already permitted by default-src 'self' — no connect-src/CDN loosening needed.
+      Acceptable for this throwaway prototype; pitchy needs none of this and stays the
+      default. See LEARNINGS.md "CREPE: detector selection + Electron loading (CSP)".
+    -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:;"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sight Reading</title>

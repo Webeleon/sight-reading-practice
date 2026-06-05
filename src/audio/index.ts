@@ -58,15 +58,42 @@ export {
   ANALYSIS_HOP_MS,
 } from './pitchDetector.js';
 
+// --- CREPE pitch detection math (PURE; node-testable; no tfjs) ---
+export type { CrepeFramePitch } from './crepeMath.js';
+export {
+  CREPE_SAMPLE_RATE,
+  CREPE_FRAME_SIZE,
+  CREPE_PITCH_BINS,
+  CREPE_CENTS_OFFSET,
+  CREPE_CENTS_PER_BIN,
+  CREPE_LOCAL_AVERAGE_RADIUS,
+  binToCents,
+  centsToHz,
+  binToHz,
+  normalizeFrame,
+  resampleLinear,
+  framePitchFromActivation,
+} from './crepeMath.js';
+
+// --- CREPE live pitch detection (Web Audio + tfjs; renderer-only) ---
+export {
+  CrepeDetector,
+  loadCrepeModel,
+  CREPE_MODEL_URL,
+  CREPE_INFERENCE_INTERVAL_MS,
+} from './crepeDetector.js';
+
 // --- live input graph (Web Audio + getUserMedia) ---
 export type {
   AudioInputDevice,
   AudioGraphOptions,
   DetectionFrame,
+  DetectorKind,
 } from './audioGraph.js';
 export {
   AudioGraph,
   enumerateInputDevices,
   ensureMicPermission,
   RECORDING_MIME_TYPE,
+  DEFAULT_DETECTOR_KIND,
 } from './audioGraph.js';

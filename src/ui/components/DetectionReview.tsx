@@ -421,7 +421,15 @@ export function DetectionReview({
       <div className="review-header">
         <h3>Detection detail</h3>
         <span className="review-mode" title="LIVE has mic frames + recording; SYNTHETIC has neither">
-          mode: {isLive ? 'live' : 'synthetic'} · frames: {review.frames.length} ·
+          detector:{' '}
+          <strong className="review-detector">
+            {review.detector === 'crepe'
+              ? 'CREPE'
+              : review.detector === 'pitchy'
+                ? 'pitchy'
+                : '—'}
+          </strong>{' '}
+          · mode: {isLive ? 'live' : 'synthetic'} · frames: {review.frames.length} ·
           detected: {review.detected.length}
         </span>
       </div>

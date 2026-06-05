@@ -2000,3 +2000,222 @@ shows on a +12 row, the mode badge reads "synthetic · frames 0", and the audio 
 geometry; the continuous trace requires live `frames` (mic). This is by design and matches the
 constraint. `npm run verify` (409 tests + property + pure/node/ui typecheck + check-purity) and
 `npm run build` (electron-vite renderer/main/preload) both green after deleting both temp files.
+
+---
+
+## CREPE pitch detection (TensorFlow.js) — the octave-error escape hatch
+
+**Why.** Brief section 4 anticipated this: "If accuracy is insufficient for clean single-note
+guitar input, escalate to CREPE via TensorFlow.js and flag this to the human." Live testing
+showed `pitchy` makes OCTAVE errors on guitar (detecting notes 1-2 octaves down — a classic
+YIN/MPM weakness on a string instrument rich in harmonics where the true fundamental is weak).
+The human chose to add CREPE as a SELECTABLE alternative (pitchy <-> CREPE) so both can be
+A/B-compared in the detection-review view. This phase BUILT + OFFLINE-VALIDATED the CREPE
+detector; it is NOT yet wired into the UI (that is the follow-on task).
+
+**Model source + size.** The ml5.js pitch-detection model IS the standard CREPE model, a tfjs
+`LayersModel`. Downloaded ALL files from the `ml5js/ml5-data-and-models` repo
+(`models/pitch-detection/crepe/`) via raw.githubusercontent.com and BUNDLED LOCALLY at
+`src/ui/public/models/crepe/` so it loads SAME-ORIGIN under the app CSP (`default-src 'self'`),
+not from a remote CDN. Files: `model.json` (15.7 KB) + 13 weight shards
+(`group1-shard1of1` … `group13-shard1of1`). **Total bundle ~1.87 MB.** Architecture: the CREPE
+"tiny" variant — 6 Conv2D/BN/MaxPool/Dropout blocks (filters 128→16→16→16→32→64, kernels
+512x1 then 64x1) → Flatten → Dense(360, **sigmoid**). Input `[null, 1024]`, output `[n, 360]`
+(one sigmoid activation per 20-cent pitch bin). Verified integrity: shard bytes on disk
+(1,948,384) match the manifest's declared weight shapes EXACTLY, and `model.json` parses. The
+weights are real (not fabricated) — confirmed by correct inference below.
+
+**Framing + post-processing (lives in `src/audio/crepeMath.ts`, PURE, no tfjs, node-tested).**
+- resample device-rate input → 16000 Hz mono (linear interp; `resampleLinear`). At 48 kHz one
+  CREPE window needs `ceil(1024*48000/16000)=3072` input samples → AnalyserNode `fftSize=4096`
+  (smallest power-of-two ≥ that); at 44.1 kHz also 4096.
+- frame into 1024-sample windows; **per-frame normalize** (subtract mean, divide by std;
+  silent/constant frames → zeros, no NaN).
+- model input `[n,1024]` → output `[n,360]`.
+- bin → cents: `cents = 20*bin + 1997.3794084376191`; `freq = 10 * 2^(cents/1200)`. Bin 0 ≈
+  31.7 Hz, bin 359 ≈ 1975 Hz — brackets the whole guitar range.
+- predicted cents = **local activation-weighted average** of cents over ±4 bins around the
+  argmax (sub-bin centroid — this is what lands the estimate within a few cents instead of
+  snapping to the nearest 20-cent bin).
+- confidence/clarity = **peak activation** in [0,1]; gate low-confidence frames with the SAME
+  `CLARITY_THRESHOLD` (0.6) + in-guitar-range check pitchy uses (`isUsableDetection`), and emit
+  freq 0 when gated so the SHARED `OnsetSegmenter` treats it as silence. Onsets via the same
+  segmenter → identical `DetectedNote` contract → drop-in interchangeable with pitchy.
+
+**Interface match.** `CrepeDetector` (`src/audio/crepeDetector.ts`) takes the SAME
+`PitchDetectorOptions` (`{ context, source, audioTimeToScheduleMs, onSample, onNote,
+segmenterConfig, requestFrame, cancelFrame }`), emits the SAME `PitchEvent` stream +
+`DetectedNote` onsets. ONE difference vs `LivePitchDetector`: **`start()` is `async`** (it
+awaits model load) whereas pitchy's is sync — the AudioGraph must `await detector.start()` when
+wiring. Model is loaded ONCE + cached at module level (`loadCrepeModel()`, idempotent) and
+warmed up with a dummy `[1,1024]` pass so the first live frame doesn't stall on graph
+compilation. Inference is throttled to ~32 ms (`CREPE_INFERENCE_INTERVAL_MS`); pitchy runs every
+rAF (~16 ms). Latency is out of scope (brief 2) so a per-frame main-thread CNN pass is fine.
+
+**Measured accuracy (OFFLINE, no mic) vs pitchy's octave errors.** A throwaway
+`scripts/_verify_crepe.ts` (run via `node --import tsx`, then DELETED) loaded the bundled model
+under tfjs (CPU backend in Node) and fed synthetic 16 kHz sine buffers at known guitar pitches
+through the EXACT crepeMath framing+postprocess path, asserting <30¢ error and NO octave shift.
+ALL SIX PASSED — median over 7 non-overlapping frames each:
+
+| pitch       | target Hz | detected Hz | midi (det/exp) | cents err | octaveOff | conf  |
+|-------------|-----------|-------------|----------------|-----------|-----------|-------|
+| E2 (low E)  | 82.41     | 82.47       | 40 / 40        | +1.2¢     | 0         | 0.868 |
+| A2          | 110.00    | 109.98      | 45 / 45        | −0.3¢     | 0         | 0.880 |
+| A3          | 220.00    | 219.87      | 57 / 57        | −1.0¢     | 0         | 0.850 |
+| E4 (high E) | 329.63    | 329.97      | 64 / 64        | +1.8¢     | 0         | 0.909 |
+| A4          | 440.00    | 440.81      | 69 / 69        | +3.2¢     | 0         | 0.926 |
+| A5          | 880.00    | 881.34      | 81 / 81        | +2.6¢     | 0         | 0.929 |
+
+Every pitch within **±3.2 cents** and — the key result — **octaveOff = 0 for all**. CREPE nails
+the octave pitchy was getting wrong. (Caveat: these are PURE sine tones, the easy case; the real
+test is a plucked guitar string with its harmonic stack at Gate 3. But the offline numbers are
+exactly what we needed to greenlight wiring it in.) The pure bin↔cents↔Hz math + a fake-Gaussian
+-activation argmax are ALSO covered permanently by `src/audio/crepeMath.test.ts` (12 tests, node).
+
+**Browser smoke (Playwright, Chromium = the Electron renderer engine).** Served the prod renderer
+build statically and confirmed: (a) `models/crepe/model.json` + shards fetch SAME-ORIGIN 200 OK
+under `default-src 'self'`; (b) on the **WebGL backend** (renderer default) the model loads in
+~28 ms and infers correctly — 220/440/880 Hz → −0.7¢/+3.9¢/+2.4¢, all correct octave, conf
+0.84-0.93 — i.e. WebGL matches the Node CPU numbers.
+
+**!! CSP BLOCKER for the UI-wiring task — tfjs needs `'unsafe-eval'` !!** tfjs (BOTH cpu and
+webgl backends) uses `new Function`/`eval` for kernel/shader codegen. Under the app's CURRENT
+renderer CSP (`src/ui/index.html`: `script-src 'self'`) tfjs throws
+`EvalError: ... 'unsafe-eval' is not an allowed source of script` DURING MODULE INIT — before a
+backend is even selected (`tf.ready is not a function`, because the lib half-loaded). It only
+works once `'unsafe-eval'` is added to `script-src`. There is no production-clean way around this
+for tfjs in a CSP-locked renderer (the WASM backend would instead need `'wasm-unsafe-eval'`).
+**ACTION for the wiring task:** add `'unsafe-eval'` to `script-src` in `src/ui/index.html`'s CSP
+(only when CREPE is a thing; acceptable for a throwaway prototype). This was NOT changed here
+because the CSP is renderer-wide and belongs with the UI wiring, not the detector build.
+
+**Bundle-size note.** Re-exporting `crepeDetector` from `src/audio/index.ts` pulls tfjs into the
+renderer bundle transitively (DetectionReview imports the audio barrel) → renderer JS jumped from
+~0.5 MB to **~5 MB**. Fine for a throwaway. If it ever matters, lazy-`import()` `crepeDetector`
+only when the user selects CREPE so tfjs is code-split out of the initial chunk.
+
+**Files added:** `src/audio/crepeDetector.ts` (Web-Audio + tfjs plumbing, renderer-only),
+`src/audio/crepeMath.ts` (PURE framing/normalize/resample/postprocess math, no tfjs),
+`src/audio/crepeMath.test.ts` (12 node tests), exports added to `src/audio/index.ts`,
+`@tensorflow/tfjs@^4.22.0` dependency, model bundled at `src/ui/public/models/crepe/` (1.87 MB).
+`npm run verify` green (421 tests, +12 from crepeMath; property + pure/node/ui typecheck +
+check-purity all pass — **tfjs did NOT leak into the pure layer**). `npm run build` green
+(electron-vite copies `public/models/` into the renderer output same-origin). Not wired into the
+UI; not committed.
+
+## CREPE: detector selection + Electron loading (CSP)
+
+The follow-up wiring phase made CREPE a SELECTABLE alternative to pitchy (A/B in the
+detection-review view) and got tfjs loading correctly in the Electron renderer. pitchy stays
+the DEFAULT + the always-available fallback; CREPE is opt-in.
+
+**Detector kind + AudioGraph factory.** Added `DetectorKind = 'pitchy' | 'crepe'` +
+`DEFAULT_DETECTOR_KIND = 'pitchy'` in `src/audio/audioGraph.ts` (re-exported from the barrel).
+`AudioGraphOptions` gained a `detector?: DetectorKind` field; `AudioGraph.start()` constructs the
+chosen detector. The two detectors have DIFFERENT start signatures — `LivePitchDetector.start()`
+is SYNC, `CrepeDetector.start()` is ASYNC (it awaits the tfjs model). Unified them behind a tiny
+internal `RunnableDetector { start(): void | Promise<void>; stop(): void }` so the graph can
+`await` either. `AudioGraph.start()` is already async (getUserMedia), so awaiting the CREPE model
+load there is free.
+
+**Fallback behavior (the key requirement).** When `detector==='crepe'`, the graph does
+`try { await crepe.start() } catch { …pitchy }`: if the bundled model fails to load it logs
+`[CREPE] model failed to load at run start; FALLING BACK to pitchy for this take` and constructs a
+`LivePitchDetector` instead, so the take STILL RUNS. The graph records which detector is actually
+live in `getActiveDetectorKind()` (may differ from the requested kind after a fallback). pitchy
+itself never goes through this path — selecting pitchy constructs it directly, no model, no risk.
+
+**Threading the choice.** `useSightReading` gained `detectorKind?: DetectorKind` (passed straight
+to the AudioGraph for LIVE takes; synthetic takes run no detector). After `graph.start()` resolves
+the hook reads `graph.getActiveDetectorKind()` into `activeDetector` (live hook state) AND stamps
+it on the per-run `ReviewPayload.detector` (so the review labels the A/B run with what TRULY ran,
+post-fallback). `App.tsx` owns the `detectorKind` state, persists it via the existing appConfig IPC
+(`detector?: 'pitchy' | 'crepe'` added to AppConfig in `appConfig.ts` + `electron/preload.ts` +
+`electron/main.ts`; the `config:set` handler's spread-merge already round-trips arbitrary keys),
+restores it on mount, and renders a **"Detector: pitchy | CREPE"** `<select>` in the transport
+section (disabled while running). The detection-review header now shows `detector: <name>` next to
+the existing mode/frames/detected. A small amber "(running pitchy)" note appears in the transport
+if CREPE fell back mid-take.
+
+**!! CSP change (the Electron-loading blocker) !!** The prior phase flagged that tfjs throws
+`EvalError: 'unsafe-eval' is not an allowed source of script` under the old renderer CSP
+(`script-src 'self'`), because tfjs generates kernels/shaders via `new Function`/`eval` at runtime
+on BOTH its webgl (renderer default) and cpu backends. **Exact change** in `src/ui/index.html`:
+```
+- script-src 'self';
++ script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval';
+```
+Everything else in the CSP is UNCHANGED (`default-src 'self'`, `style-src 'self' 'unsafe-inline'`,
+`img-src 'self' data:`). **Why each token:** `'unsafe-eval'` is the one tfjs actually requires
+(covers `new Function`/`eval` codegen on webgl+cpu); `'wasm-unsafe-eval'` is the TIGHTER grant that
+covers the WASM backend's `WebAssembly.compile` path if a future build selects it — kept alongside
+so switching backends needs no further CSP edit, and it is strictly narrower than `'unsafe-eval'`
+so it adds no extra surface. **No CDN / connect-src loosening was needed**: the model.json + 13
+weight shards load SAME-ORIGIN from the bundled `src/ui/public/models/crepe/` (copied by
+electron-vite into `dist-electron/renderer/models/crepe/`), already permitted by
+`default-src 'self'`. This loosening is acceptable for a throwaway prototype; pitchy needs none of
+it and remains the default, so the un-relaxed path is the common one.
+
+**Verified at runtime (Playwright/Chromium on the prod renderer build).** Served
+`dist-electron/renderer/` statically and confirmed under the ENFORCED meta-CSP: `new Function`
+returns 42 and `eval('1+2')` returns 3 (i.e. `'unsafe-eval'` is in effect — these throw under the
+old CSP), and `fetch('models/crepe/model.json')` → 200 (`format: layers-model`, 1 shard path) plus
+the first weight shard → 200, all same-origin. Only console error is the harmless `favicon.ico`
+404.
+
+**Verify/build.** `npm run verify` green (421 tests unchanged — no new tests this phase, it is
+wiring; pure/node/ui typecheck + property + check-purity all pass — **tfjs still did NOT leak into
+the pure layer**: the new code lives in `audioGraph.ts`/`useSightReading.ts`/`App.tsx`, all UI/Web-
+Audio layer). `npm run build` green; renderer JS ~5.1 MB (tfjs, expected) and `models/crepe/` (14
+files) copied into the renderer output. Not committed.
+
+**Files changed:** `src/audio/audioGraph.ts` (DetectorKind + factory + fallback +
+getActiveDetectorKind), `src/audio/index.ts` (export DetectorKind + DEFAULT_DETECTOR_KIND),
+`src/ui/useSightReading.ts` (detectorKind option, activeDetector output, ReviewPayload.detector),
+`src/ui/App.tsx` (detector state + persistence + transport `<select>`),
+`src/ui/components/DetectionReview.tsx` (detector name in header), `src/ui/appConfig.ts` +
+`electron/preload.ts` + `electron/main.ts` (persisted `detector` field), `src/ui/index.html` (CSP
+`'unsafe-eval'`/`'wasm-unsafe-eval'`), `src/ui/styles.css` (picker styling).
+
+### CREPE adversarial verification (2026-06-05)
+
+Independently verified the CREPE addition; all five checks PASS.
+1. **Math:** `cents=20*bin+1997.3794084376191`, `freq=10*2^(cents/1200)` reproduced from
+   scratch. Round-trip (Hz->fractional bin->Hz) is exact to ~1e-13 cents for the guitar
+   range (82.41/110/146.83/196/220/329.63/440/880 Hz). Bin nearest 440Hz is bin 228
+   (441.543Hz, +6.06c at the quantized peak); the weighted-centroid post-process recovers
+   440.000Hz sub-bin. Constant matches the reference CREPE `cents_mapping`.
+   - MINOR doc bug: `crepeMath.ts` line ~25 comment says "Bin 0 ~= 32.70 Hz (C1)" but the
+     constant actually puts bin 0 at **31.70 Hz** (the unit test correctly asserts ~31.7).
+     A C1=32.703Hz offset would be 2051.31, not 1997.38. Comment-only; math is correct.
+2. **Drop-in:** `CrepeDetector` mirrors `LivePitchDetector` — same `PitchDetectorOptions`
+   constructor (context/source/audioTimeToScheduleMs/onSample/onNote), start/stop, same
+   `PitchEvent` emission + `DetectedNote` onsets via the SHARED `OnsetSegmenter`. Only
+   intentional diff: `start()` is async (awaits tfjs model); `AudioGraph` normalizes via a
+   `RunnableDetector { start(): void|Promise<void> }` seam and awaits both.
+3. **Purity:** grep of domain/generator/evaluation/musicxml/content for tensorflow = 0 hits.
+   tsconfig.pure includes only the 6 pure dirs (not src/audio). `check-purity.sh` OK.
+   `npm run verify` green (421 tests + property + 3 typechecks + purity).
+4. **CSP:** model loads same-origin via relative `models/crepe/model.json` (no CDN; all 13
+   weight-shard manifest paths relative). `default-src 'self'` unchanged, `connect-src` not
+   added. script-src gains `'wasm-unsafe-eval' 'unsafe-eval'` for tfjs runtime codegen —
+   documented + justified, but `'unsafe-eval'` is the one non-trivial loosening (acceptable
+   for a throwaway). Model topology confirms InputLayer [null,1024] -> Dense 360 sigmoid.
+   Public tree copies to dist-electron/renderer/models/crepe/ on build (verified present).
+5. **Fallback:** pitchy is DEFAULT_DETECTOR_KIND; CREPE opt-in. AudioGraph.start() catches a
+   CREPE model-load rejection, logs a [CREPE] warning, and constructs a LivePitchDetector
+   (pitchy) fallback; getActiveDetectorKind() reflects the real detector for the A/B header.
+
+### CREPE finalization (2026-06-05)
+
+Final gate before commit: `npm run verify` GREEN (33 test files / 421 tests, +1 property
+test, 3 typechecks pure/node/ui, check-purity OK) and `npm run build` GREEN (electron-vite:
+main 8.94kB + persistence chunk 28.61kB, preload 3.29kB, renderer index 1.45kB + css
+13.98kB + JS bundle **5,109kB / ~4.9M** — tfjs dominates this; pre-CREPE the renderer JS
+was a few hundred kB). The local CREPE model (model.json + 13 weight shards, ~1.9M of
+weights) copies from src/ui/public/models/crepe/ to dist-electron/renderer/models/crepe/
+(2.3M on disk incl. manifest) and resolves same-origin under the app CSP. pitchy confirmed
+as DEFAULT_DETECTOR_KIND (default + fallback); CREPE opt-in. Bundle size is expected and
+acceptable for a throwaway prototype (no code-splitting / lazy tfjs import attempted —
+latency + size are out of scope per brief section 2).

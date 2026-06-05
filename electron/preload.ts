@@ -18,6 +18,8 @@ export interface AppConfig {
   inputDeviceId?: string;
   /** Whether the user has dismissed the one-time headphone tip. */
   headphoneTipDismissed?: boolean;
+  /** Selected pitch detector ('pitchy' default | 'crepe'), persisted for A/B. */
+  detector?: 'pitchy' | 'crepe';
 }
 
 /** Filter bag passed to the stats queries; mirrors AccuracyFilter/HeatmapFilter

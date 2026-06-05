@@ -20,9 +20,11 @@ import {
   Metronome,
   currentNoteIndexAt,
   DEFAULT_COUNT_IN_BARS,
+  DEFAULT_DETECTOR_KIND,
   AudioGraph,
   type Schedule,
   type DetectionFrame,
+  type DetectorKind,
 } from '../audio/index.js';
 import {
   evaluateAttempt,
@@ -62,6 +64,12 @@ export interface ReviewPayload {
   detected: DetectedNote[];
   recording: Blob | null;
   expected: ExpectedNote[];
+  /**
+   * The detector that ACTUALLY produced this take's detections, so the review
+   * header can label the A/B comparison. 'pitchy' or 'crepe' in LIVE mode (after
+   * any CREPE->pitchy fallback); null for a SYNTHETIC take (no detector ran).
+   */
+  detector: DetectorKind | null;
 }
 
 export interface UseSightReadingOptions {
@@ -70,6 +78,13 @@ export interface UseSightReadingOptions {
   countInBars?: number;
   /** Selected input device for live detection (undefined = system default). */
   inputDeviceId?: string;
+  /**
+   * Which pitch detector to run for LIVE takes ('pitchy' default, 'crepe' opt-in).
+   * Synthetic takes ignore this (no detector runs). If 'crepe' is chosen but its
+   * model fails to load, the graph falls back to pitchy and `activeDetector`
+   * reflects the fallback. Default 'pitchy'.
+   */
+  detectorKind?: DetectorKind;
   /** When true, the metronome ALSO plays a soft tone per line note ("Hear line")
    *  so the player can hear the melody while reading. Synced to the same audio
    *  clock as the clicks (never drifts). Default handled by the caller. */
@@ -94,6 +109,12 @@ export interface UseSightReading {
   review: ReviewPayload | null;
   /** attempt_type of the run that produced `result`. */
   attemptType: AttemptType;
+  /**
+   * The detector ACTUALLY running for the current/last LIVE take (after any
+   * CREPE->pitchy fallback), or null when no live detector is active (idle /
+   * synthetic). Lets the UI show the live detector while running.
+   */
+  activeDetector: DetectorKind | null;
   /** Live count of detected notes so far (for an on-screen readout). */
   detectedCount: number;
   /** 1-based current count-in beat while phase==='countIn' (0 when not counting
@@ -132,6 +153,7 @@ export function useSightReading(
     cursor,
     countInBars = DEFAULT_COUNT_IN_BARS,
     inputDeviceId,
+    detectorKind = DEFAULT_DETECTOR_KIND,
     syntheticTake = null,
     melody = false,
   } = options;
@@ -141,6 +163,7 @@ export function useSightReading(
   const [result, setResult] = useState<EvaluationResult | null>(null);
   const [review, setReview] = useState<ReviewPayload | null>(null);
   const [attemptType, setAttemptType] = useState<AttemptType>('first_read');
+  const [activeDetector, setActiveDetector] = useState<DetectorKind | null>(null);
   const [detectedCount, setDetectedCount] = useState(0);
   const [countInBeat, setCountInBeat] = useState(0);
   const [countInTotalBeats, setCountInTotalBeats] = useState(0);
@@ -160,6 +183,10 @@ export function useSightReading(
   cursorRef.current = cursor;
   const attemptTypeRef = useRef<AttemptType>('first_read');
   const finishedRef = useRef(false);
+  // The detector kind actually live for the current run (null in synthetic mode).
+  // Captured after graph.start() resolves (so a CREPE->pitchy fallback is reflected)
+  // and read at finalize time to label the review payload.
+  const activeDetectorRef = useRef<DetectorKind | null>(null);
 
   const stop = useCallback((): void => {
     if (rafRef.current !== null) {
@@ -172,6 +199,8 @@ export function useSightReading(
     graphRef.current = null;
     setIsRunning(false);
     setCountInBeat(0);
+    setActiveDetector(null);
+    activeDetectorRef.current = null;
   }, []);
 
   useEffect(() => stop, [stop]);
@@ -204,6 +233,10 @@ export function useSightReading(
       finishedRef.current = false;
       attemptTypeRef.current = type;
       setAttemptType(type);
+      // Synthetic takes run no detector; live takes set this once graph.start()
+      // resolves (so a CREPE->pitchy fallback is reflected). Reset up front.
+      activeDetectorRef.current = take ? null : detectorKind;
+      setActiveDetector(take ? null : detectorKind);
       setResult(null);
       setReview(null);
       setDetectedCount(0);
@@ -245,6 +278,7 @@ export function useSightReading(
       if (!take) {
         const graph = new AudioGraph(ctx, {
           deviceId: inputDeviceId,
+          detector: detectorKind,
           onNote: (note: DetectedNote) => {
             // Ignore detections during the count-in: the metronome clicks + string
             // noise before the line starts are not part of the performance and would
@@ -255,9 +289,18 @@ export function useSightReading(
           },
         });
         graphRef.current = graph;
-        graph.start(metro.getStartAudioTime()).catch((err: unknown) => {
-          console.error('[AUDIO] failed to start live input graph', err);
-        });
+        graph
+          .start(metro.getStartAudioTime())
+          .then(() => {
+            // Record the detector ACTUALLY running (CREPE may have fallen back to
+            // pitchy if its model failed to load) so the review labels the A/B run.
+            const active = graph.getActiveDetectorKind();
+            activeDetectorRef.current = active;
+            setActiveDetector(active);
+          })
+          .catch((err: unknown) => {
+            console.error('[AUDIO] failed to start live input graph', err);
+          });
       }
 
       const tick = (): void => {
@@ -404,6 +447,9 @@ export function useSightReading(
           detected: detectedSnapshot,
           recording: null,
           expected: expectedSnapshot,
+          // The detector that produced this take (null for synthetic; pitchy/crepe
+          // for live, reflecting any CREPE->pitchy fallback).
+          detector: graph ? activeDetectorRef.current : null,
         });
         if (graph) {
           void graph.getRecording().then((blob) => {
@@ -429,7 +475,8 @@ export function useSightReading(
         );
         console.log(
           `[UI] review payload: frames=${frames.length} detected=${detectedSnapshot.length} ` +
-            `expected=${expectedSnapshot.length} mode=${graph ? 'LIVE' : 'SYNTHETIC'}`,
+            `expected=${expectedSnapshot.length} mode=${graph ? 'LIVE' : 'SYNTHETIC'} ` +
+            `detector=${graph ? activeDetectorRef.current : 'none'}`,
         );
       };
 
@@ -437,7 +484,7 @@ export function useSightReading(
     },
     // detectedCount intentionally excluded (read via ref inside tick).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [line, countInBars, inputDeviceId, syntheticTake, melody, stop],
+    [line, countInBars, inputDeviceId, detectorKind, syntheticTake, melody, stop],
   );
 
   return {
@@ -446,6 +493,7 @@ export function useSightReading(
     result,
     review,
     attemptType,
+    activeDetector,
     detectedCount,
     countInBeat,
     countInTotalBeats,

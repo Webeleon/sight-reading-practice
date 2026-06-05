@@ -9,6 +9,10 @@
 export interface AppConfig {
   inputDeviceId?: string;
   headphoneTipDismissed?: boolean;
+  /** Selected pitch detector ('pitchy' default | 'crepe'); persisted so the A/B
+   *  choice survives across runs. Kept as a plain string union here to avoid the
+   *  appConfig module depending on the audio layer's DetectorKind type. */
+  detector?: 'pitchy' | 'crepe';
 }
 
 interface ConfigBridge {

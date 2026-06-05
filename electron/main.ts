@@ -37,6 +37,8 @@ interface AppConfig {
   inputDeviceId?: string;
   /** Whether the user has dismissed the one-time headphone tip. */
   headphoneTipDismissed?: boolean;
+  /** Selected pitch detector ('pitchy' default | 'crepe'), persisted for A/B. */
+  detector?: 'pitchy' | 'crepe';
 }
 
 function configPath(): string {

@@ -32,6 +32,8 @@ import {
   synthesizeKnownErrorTake,
 } from './evaluationBridge.js';
 import type { DetectedNote, EvaluationResult } from '../evaluation/index.js';
+import { DEFAULT_DETECTOR_KIND, type DetectorKind } from '../audio/index.js';
+import { getAppConfig, setAppConfig } from './appConfig.js';
 import {
   DEFAULT_UI_CONFIG,
   generateFreshLine,
@@ -47,8 +49,8 @@ import {
   newId,
 } from './sessionBridge.js';
 // appConfig.ts owns the global `Window.sightReading` declaration (it adds the
-// `config` IPC member); importing it keeps a single source of truth for the type.
-import './appConfig.js';
+// `config` IPC member) AND the detector-choice persistence used below; the named
+// import above keeps a single source of truth for that type.
 
 const COUNT_IN_BARS = 1;
 const RETRY_SLOWER_FACTOR = 0.7; // retry_slower tempo = 70% of configured tempo
@@ -63,6 +65,11 @@ export function App(): React.JSX.Element {
   const [uiConfig, setUiConfig] = useState<UiConfig>(DEFAULT_UI_CONFIG);
   const [line, setLine] = useState<Line | null>(null);
   const [inputDeviceId, setInputDeviceId] = useState<string | undefined>(undefined);
+  // Which pitch detector to run for LIVE takes. pitchy is the DEFAULT + always-
+  // available fallback; CREPE is opt-in (TensorFlow.js, octave-robust). Persisted
+  // via the appConfig IPC so the A/B choice survives a relaunch. The detection-
+  // review header shows the detector that ACTUALLY ran (after any CREPE fallback).
+  const [detectorKind, setDetectorKind] = useState<DetectorKind>(DEFAULT_DETECTOR_KIND);
   // Synthetic-take harness (hardware-free testing of the evaluation/feedback path).
   const [syntheticMode, setSyntheticMode] = useState(false);
   const [syntheticAccuracy, setSyntheticAccuracy] = useState(0.8);
@@ -99,6 +106,7 @@ export function App(): React.JSX.Element {
     result,
     review,
     attemptType,
+    activeDetector,
     detectedCount,
     countInBeat,
     countInTotalBeats,
@@ -109,6 +117,7 @@ export function App(): React.JSX.Element {
     cursor: cursorReady ? cursorHandleRef.current : null,
     countInBars: COUNT_IN_BARS,
     inputDeviceId,
+    detectorKind,
     melody,
   });
 
@@ -116,6 +125,24 @@ export function App(): React.JSX.Element {
   useEffect(() => {
     setLine(generateFreshLine(DEFAULT_UI_CONFIG));
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Restore the persisted detector choice on mount (Electron IPC, else
+  // localStorage). Defaults to pitchy if unset / persistence off.
+  useEffect(() => {
+    void getAppConfig().then((cfg) => {
+      if (cfg.detector === 'crepe' || cfg.detector === 'pitchy') {
+        setDetectorKind(cfg.detector);
+        console.log(`[UI] restored detector choice: ${cfg.detector}`);
+      }
+    });
+  }, []);
+
+  // Change + persist the detector choice (no-op persistence outside Electron).
+  const handleDetectorChange = useCallback((kind: DetectorKind): void => {
+    setDetectorKind(kind);
+    console.log(`[UI] detector selected: ${kind}`);
+    void setAppConfig({ detector: kind });
   }, []);
 
   // Begin a session on mount; end it on unmount (the main process ALSO ends any
@@ -312,6 +339,28 @@ export function App(): React.JSX.Element {
             onChange={(e) => setMelody(e.target.checked)}
           />
           Hear line
+        </label>
+        <label
+          className="detector-picker"
+          title="pitchy (default, fast) vs CREPE (TensorFlow.js, octave-robust). CREPE falls back to pitchy if its model fails to load. Disabled while running."
+        >
+          Detector:
+          <select
+            value={detectorKind}
+            disabled={isRunning}
+            onChange={(e) => handleDetectorChange(e.target.value as DetectorKind)}
+          >
+            <option value="pitchy">pitchy</option>
+            <option value="crepe">CREPE</option>
+          </select>
+          {isRunning && activeDetector && activeDetector !== detectorKind && (
+            <span
+              className="detector-fallback"
+              title="CREPE model failed to load; running pitchy for this take."
+            >
+              {' '}(running {activeDetector})
+            </span>
+          )}
         </label>
         <span className="detected-count">detected: {detectedCount}</span>
       </section>

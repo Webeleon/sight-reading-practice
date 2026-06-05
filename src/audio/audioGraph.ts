@@ -16,7 +16,31 @@ import {
   type PitchEvent,
   type PitchDetectorOptions,
 } from './pitchDetector.js';
+import { CrepeDetector } from './crepeDetector.js';
 import type { DetectedNote } from '../evaluation/index.js';
+
+/**
+ * Which pitch detector to run. `pitchy` (MPM/McLeod on a main-thread AnalyserNode)
+ * is the DEFAULT + the always-available fallback; `crepe` is the opt-in TensorFlow.js
+ * CNN tracker (octave-robust, heavier per frame — latency is out of scope, brief
+ * section 2). The two are drop-in interchangeable (same PitchDetectorOptions, same
+ * emitted onSample/onNote contract) so the detection-review view can A/B them.
+ */
+export type DetectorKind = 'pitchy' | 'crepe';
+
+/** Default detector — pitchy, per the brief: CREPE is opt-in. */
+export const DEFAULT_DETECTOR_KIND: DetectorKind = 'pitchy';
+
+/**
+ * The minimal lifecycle the AudioGraph drives on either detector. LivePitchDetector
+ * (pitchy) has a SYNC start(); CrepeDetector's start() is ASYNC (it awaits the tfjs
+ * model). We normalise to `Promise<void>` so the graph can `await` both and catch a
+ * CREPE model-load rejection to fall back to pitchy. stop() is sync on both.
+ */
+interface RunnableDetector {
+  start(): void | Promise<void>;
+  stop(): void;
+}
 
 /**
  * One lightweight RAW detector frame captured during a LIVE run, on the SAME
@@ -103,6 +127,13 @@ export async function ensureMicPermission(): Promise<boolean> {
 export interface AudioGraphOptions {
   /** Device to open, or undefined for the system default input. */
   deviceId?: string;
+  /**
+   * Which detector to construct (default 'pitchy'). 'crepe' loads the bundled
+   * TensorFlow.js model at run start; if that load FAILS the graph logs a [CREPE]
+   * warning and falls back to a LivePitchDetector (pitchy) so the take still runs.
+   * Inspect getActiveDetectorKind() after start() to see which one is actually live.
+   */
+  detector?: DetectorKind;
   /** Raw per-frame pitch events (live readout / debugging). */
   onSample?: (event: PitchEvent) => void;
   /** Committed note onsets that feed evaluation. */
@@ -137,8 +168,11 @@ export class AudioGraph {
   private readonly opts: AudioGraphOptions;
   private stream: MediaStream | null = null;
   private sourceNode: MediaStreamAudioSourceNode | null = null;
-  private detector: LivePitchDetector | null = null;
+  private detector: RunnableDetector | null = null;
   private running = false;
+  /** The detector kind ACTUALLY running after start() (may differ from the
+   *  requested kind when a CREPE model-load failure forced a pitchy fallback). */
+  private activeDetectorKind: DetectorKind = DEFAULT_DETECTOR_KIND;
 
   // --- detection-review capture (in-memory only) ---------------------------
   /** Raw per-frame trace for the review's continuous pitch graph. */
@@ -164,6 +198,15 @@ export class AudioGraph {
 
   isRunning(): boolean {
     return this.running;
+  }
+
+  /**
+   * The detector kind that is ACTUALLY running (after any CREPE->pitchy fallback).
+   * Read this after start() resolves so the UI can label the A/B comparison with
+   * what the take truly used, not just what was requested.
+   */
+  getActiveDetectorKind(): DetectorKind {
+    return this.activeDetectorKind;
   }
 
   /**
@@ -258,17 +301,46 @@ export class AudioGraph {
       this.opts.onSample?.(event);
     };
 
-    this.detector = new LivePitchDetector({
+    const detectorOpts: PitchDetectorOptions = {
       context: this.ctx,
       source: this.sourceNode,
       audioTimeToScheduleMs: mapper,
       onSample,
       onNote: this.opts.onNote,
-    });
-    this.detector.start();
+    };
+
+    const requested = this.opts.detector ?? DEFAULT_DETECTOR_KIND;
+    if (requested === 'crepe') {
+      // Try CREPE; if its tfjs model fails to load at run start, fall back to
+      // pitchy so the take still works (brief: pitchy is the default + fallback).
+      const crepe = new CrepeDetector(detectorOpts);
+      try {
+        await crepe.start(); // awaits the bundled tfjs model load + warmup
+        this.detector = crepe;
+        this.activeDetectorKind = 'crepe';
+        console.log('[CREPE] detector active for this take');
+      } catch (err) {
+        console.warn(
+          '[CREPE] model failed to load at run start; FALLING BACK to pitchy ' +
+            'for this take. Underlying error:',
+          err,
+        );
+        const fallback = new LivePitchDetector(detectorOpts);
+        fallback.start();
+        this.detector = fallback;
+        this.activeDetectorKind = 'pitchy';
+      }
+    } else {
+      const pitchy = new LivePitchDetector(detectorOpts);
+      pitchy.start();
+      this.detector = pitchy;
+      this.activeDetectorKind = 'pitchy';
+    }
+
     this.running = true;
     console.log(
-      `[AUDIO] audio graph running (captureFrames=${captureFrames} record=${record})`,
+      `[AUDIO] audio graph running (detector=${this.activeDetectorKind} ` +
+        `requested=${requested} captureFrames=${captureFrames} record=${record})`,
     );
   }
 
