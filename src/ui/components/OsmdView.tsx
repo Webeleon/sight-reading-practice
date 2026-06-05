@@ -22,8 +22,25 @@ import React, {
   useRef,
 } from 'react';
 import { OpenSheetMusicDisplay } from 'opensheetmusicdisplay';
+import type { Note } from 'opensheetmusicdisplay';
 import type { Line } from '../../domain/index.js';
 import { serializeLineToMusicXML } from '../../musicxml/serialize.js';
+
+/**
+ * Notehead colours for the three real-time feedback states (brief section 13):
+ * strong, unambiguous, readable at a distance. Exposed as named constants so the
+ * human can recolor without hunting through logic.
+ */
+export const FEEDBACK_COLORS = {
+  hit: '#1faa59', // green: correct pitch in time
+  wrong: '#e03131', // red: something at the right time, wrong pitch
+  missed: '#9aa0a6', // dim grey: nothing detected
+  /** Default (un-evaluated) notehead colour OSMD uses. */
+  neutral: '#000000',
+} as const;
+
+/** Feedback colour key for a single note (or null to leave it neutral). */
+export type NoteFeedback = 'hit' | 'wrong' | 'missed' | null;
 
 /** Imperative API the read-along loop uses to drive the cursor in musical time. */
 export interface CursorHandle {
@@ -39,8 +56,27 @@ export interface CursorHandle {
    * Pass -1 to park at the start (before the first note).
    */
   moveTo(target: number): void;
-  /** Dim the staff region behind the cursor up to `target` (read-ahead cue). Optional. */
+  /**
+   * Read-ahead cue (brief section 13: "after a note is evaluated, slightly dim
+   * the region behind the cursor"). `fraction` in [0,1] is how far the cursor has
+   * progressed through the line (== currentIndex / lastIndex); the staff area to
+   * the LEFT of that point is dimmed via a translucent overlay so the eye is
+   * pulled forward to the notes still to come. Pass 0 to clear the dim. Cheap: it
+   * just repositions a CSS overlay; it never re-renders OSMD.
+   */
+  setReadAheadDim(fraction: number): void;
+  /** The cursor's current logical index into line.notes (-1 == parked before start). */
   currentIndex(): number;
+  /**
+   * Recolour noteheads by note index (index into line.notes). Sets each given
+   * note's colour and re-renders ONCE. Indices not present are left unchanged.
+   * Pass 'hit'/'wrong'/'missed' (see FEEDBACK_COLORS); used both for live
+   * trailing feedback (a note or two at a time) and the final results screen
+   * (all notes at once).
+   */
+  colorNotes(feedbackByIndex: ReadonlyMap<number, NoteFeedback>): void;
+  /** Clear all feedback colours back to neutral and re-render. */
+  clearColors(): void;
 }
 
 export interface OsmdViewProps {
@@ -53,11 +89,16 @@ export interface OsmdViewProps {
 export const OsmdView = forwardRef<CursorHandle, OsmdViewProps>(
   function OsmdView({ line, onRendered }, ref): React.JSX.Element {
     const containerRef = useRef<HTMLDivElement | null>(null);
+    // Translucent overlay that dims the already-read region behind the cursor.
+    const dimOverlayRef = useRef<HTMLDivElement | null>(null);
     const osmdRef = useRef<OpenSheetMusicDisplay | null>(null);
     // The cursor's current logical index into line.notes (-1 == parked before start).
     const cursorIndexRef = useRef<number>(-1);
     // Number of voice entries OSMD walked for the current line (== notes.length).
     const entryCountRef = useRef<number>(0);
+    // Flat list of OSMD source Notes in score order, so note index N (into
+    // line.notes) maps to sourceNotesRef.current[N] for recolouring.
+    const sourceNotesRef = useRef<Note[]>([]);
     const onRenderedRef = useRef<typeof onRendered>(onRendered);
     onRenderedRef.current = onRendered;
 
@@ -116,6 +157,8 @@ export const OsmdView = forwardRef<CursorHandle, OsmdViewProps>(
           cursor.hide();
           entryCountRef.current = count;
           cursorIndexRef.current = -1;
+          // Collect the source notes in score order so we can recolour by index.
+          sourceNotesRef.current = collectSourceNotes(osmd);
           if (count !== line.notes.length) {
             console.warn(
               `[UI] OsmdView: cursor entry count ${count} != notes ${line.notes.length} ` +
@@ -173,13 +216,108 @@ export const OsmdView = forwardRef<CursorHandle, OsmdViewProps>(
           cursor.update();
           cursorIndexRef.current = cur;
         },
+        setReadAheadDim(fraction: number): void {
+          const overlay = dimOverlayRef.current;
+          if (!overlay) return;
+          const f = Math.min(1, Math.max(0, fraction));
+          if (f <= 0) {
+            overlay.style.opacity = '0';
+            overlay.style.width = '0%';
+            return;
+          }
+          // A soft, narrow band of dimming just behind the cursor (not a hard
+          // wall) — enough to de-emphasise the read region without hiding it, so
+          // the player can still glance back. Width tracks cursor progress.
+          overlay.style.width = `${(f * 100).toFixed(2)}%`;
+          overlay.style.opacity = '1';
+        },
         currentIndex(): number {
           return cursorIndexRef.current;
+        },
+        colorNotes(feedbackByIndex): void {
+          const osmd = osmdRef.current;
+          if (!osmd) return;
+          const notes = sourceNotesRef.current;
+          let changed = false;
+          for (const [index, fb] of feedbackByIndex) {
+            const note = notes[index];
+            if (!note || fb === null) continue;
+            note.NoteheadColor = FEEDBACK_COLORS[fb];
+            changed = true;
+          }
+          if (!changed) return;
+          // Re-render once to repaint the recoloured noteheads. The cursor logical
+          // index is preserved across render in OSMD; restore its visual position.
+          const keepIndex = cursorIndexRef.current;
+          osmd.render();
+          if (keepIndex >= 0) {
+            // After render the cursor object persists; re-point it to keepIndex.
+            const cursor = osmd.cursor;
+            cursor.reset();
+            let cur = -1;
+            while (cur < keepIndex && !cursor.iterator.EndReached) {
+              cursor.next();
+              cur++;
+            }
+            cursor.update();
+            cursorIndexRef.current = cur;
+          }
+        },
+        clearColors(): void {
+          const osmd = osmdRef.current;
+          if (!osmd) return;
+          for (const note of sourceNotesRef.current) {
+            note.NoteheadColor = FEEDBACK_COLORS.neutral;
+          }
+          osmd.render();
+          cursorIndexRef.current = -1;
+          // Clear the read-ahead dim too (fresh line / retry starts un-dimmed).
+          const overlay = dimOverlayRef.current;
+          if (overlay) {
+            overlay.style.opacity = '0';
+            overlay.style.width = '0%';
+          }
         },
       }),
       [],
     );
 
-    return <div className="osmd-container" ref={containerRef} />;
+    return (
+      <div className="osmd-wrap">
+        <div className="osmd-container" ref={containerRef} />
+        {/* Read-ahead dim: a translucent band over the already-read region,
+            sized/shown imperatively via setReadAheadDim (no re-render). */}
+        <div
+          className="osmd-readahead-dim"
+          ref={dimOverlayRef}
+          style={{ opacity: 0, width: '0%' }}
+          aria-hidden="true"
+        />
+      </div>
+    );
   },
 );
+
+/**
+ * Walk the loaded MusicSheet and return every source Note in score order. For our
+ * single-voice line this list lines up 1:1 with line.notes (rests included), so
+ * the k-th entry is line.notes[k]. Used to recolour noteheads by note index.
+ */
+function collectSourceNotes(osmd: OpenSheetMusicDisplay): Note[] {
+  const out: Note[] = [];
+  const sheet = osmd.Sheet;
+  if (!sheet) return out;
+  for (const measure of sheet.SourceMeasures) {
+    for (const container of measure.VerticalSourceStaffEntryContainers) {
+      for (const staffEntry of container.StaffEntries) {
+        if (!staffEntry) continue;
+        for (const voiceEntry of staffEntry.VoiceEntries) {
+          for (const note of voiceEntry.Notes) {
+            out.push(note);
+          }
+        }
+      }
+    }
+  }
+  return out;
+}

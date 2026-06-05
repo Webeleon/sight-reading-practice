@@ -24,3 +24,44 @@ export {
   LOOKAHEAD_MS,
   SCHEDULER_INTERVAL_MS,
 } from './metronome.js';
+
+// --- pitch math (PURE; node-testable) ---
+export {
+  A4_HZ,
+  A4_MIDI,
+  GUITAR_MIDI_LOW,
+  GUITAR_MIDI_HIGH,
+  frequencyToMidiFloat,
+  frequencyToMidi,
+  midiToFrequency,
+  centsOffNearestMidi,
+  isInGuitarRange,
+  isUsableDetection,
+} from './pitchMath.js';
+
+// --- onset segmentation (PURE; node-testable) ---
+export type { PitchSample, SegmenterConfig } from './onsetSegmenter.js';
+export {
+  OnsetSegmenter,
+  DEFAULT_SEGMENTER_CONFIG,
+  segment,
+} from './onsetSegmenter.js';
+
+// --- live pitch detection (Web Audio) ---
+export type { PitchEvent, PitchDetectorOptions } from './pitchDetector.js';
+export {
+  LivePitchDetector,
+  ANALYSIS_WINDOW_SIZE,
+  CLARITY_THRESHOLD,
+  PITCHY_INTERNAL_CLARITY,
+  MIN_VOLUME_DECIBELS,
+  ANALYSIS_HOP_MS,
+} from './pitchDetector.js';
+
+// --- live input graph (Web Audio + getUserMedia) ---
+export type { AudioInputDevice, AudioGraphOptions } from './audioGraph.js';
+export {
+  AudioGraph,
+  enumerateInputDevices,
+  ensureMicPermission,
+} from './audioGraph.js';

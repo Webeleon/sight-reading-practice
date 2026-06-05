@@ -203,6 +203,13 @@ export class Metronome {
     return (this.ctx.currentTime - this.startAudioTime) * 1000;
   }
 
+  /** The AudioContext time (seconds) that corresponds to schedule t=0 (the first
+   *  count-in click). Set on start(); the audio-input graph anchors its detected-
+   *  onset clock to this so detections share the expected-onset (schedule) clock. */
+  getStartAudioTime(): number {
+    return this.startAudioTime;
+  }
+
   /**
    * One lookahead pass: schedule every click whose time lands within the next
    * LOOKAHEAD_MS, emit a tick report, and fire onFinished once at the end.

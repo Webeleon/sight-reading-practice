@@ -1091,3 +1091,268 @@ transfers directly.
 Minor rough edge (left as-is per "functional/ugly is correct"): after "Next line", the
 TimingReadout still shows the previous run's "Finished / deviation" until Start is
 pressed again, rather than resetting to Idle. Cosmetic only.
+
+
+## Milestone 4 — PURE evaluation pipeline (`src/evaluation`)
+
+The aligner/classifier/metrics are pure data-in/data-out, with NO import of `musicalTime`
+(or anything impure): the audio/UI layer precomputes `ExpectedNote[]` from the Line + the
+existing `precomputeSchedule` (rests filtered out, `noteIndex` kept so rows join back to
+`line.notes`) and feeds plain `DetectedNote[]` records. This keeps evaluation testable with
+synthetic takes and zero hardware (the Milestone 4 acceptance gate). Public entry point:
+`evaluateAttempt(expected, detected, { tempoBpm, subdivision }) -> EvaluationResult`.
+
+### Tolerance band design (all named constants in `evaluation/tuning.ts`)
+
+- Window is a SYMMETRIC half-width `W = BASE_ONSET_TOLERANCE_MS * tempoFactor * subFactor`,
+  then split ASYMMETRICALLY into `earlyMs = W*0.6`, `lateMs = W*1.4`. At the reference
+  120 BPM / quarter grid: W=90ms, early=54ms, late=126ms. The early<late asymmetry is the
+  load-bearing musical choice — rushing is the worse fault and a plucked note physically
+  speaks a hair after intent, so lateness is forgiven more. A note late by D=90ms is a HIT;
+  an early-by-90ms note is NOT (it falls outside the 54ms early bound). This asymmetry is
+  asserted directly in the test suite.
+- `tempoFactor = (120/tempo) ** 0.85`. The 0.85 exponent (not 1.0) keeps the band a hair
+  more forgiving in absolute ms at very fast tempos — human reaction time has an absolute
+  floor, so a fully tempo-relative band gets unfairly tight at 200+ BPM. Tunable.
+- `subFactor` per finest subdivision present: quarter 1.0, eighth 0.7, triplet 0.55,
+  sixteenth 0.45. Rationale: a finer grid packs adjacent expected onsets closer, so the
+  band must tighten or neighbouring notes' bands overlap and steal each other's detections.
+  The audio/UI layer derives `subdivision` from the line's finest note value and passes it
+  in (evaluation never inspects the Line).
+- `PITCH_TOLERANCE_SEMITONES = 0` (exact MIDI, the brief's rule), kept as a constant so the
+  human can relax to 1 if octave/string confusion in real detection proves common.
+- `TRAILING_EVALUATION_DELAY_MS = 100` lives HERE (not buried in the UI) so the UI's
+  commit-colour delay and the LATE band are tuned from one place and stay consistent.
+
+### Classification / alignment subtleties discovered while building
+
+- Alignment is purely TEMPORAL (pitch is NOT used to pair). A right-time/wrong-pitch
+  detection still claims its expected note (-> `wrong_pitch`) instead of leaking through as
+  an `extra`. This matters: otherwise a wrong note both spawns an `extra` AND leaves the
+  expected note `missed`, double-counting one mistake.
+- Greedy nearest-onset assignment with a sort key of (in-band first, then |delta|) gives a
+  stable, intuitive one-to-one pairing for a monophonic line. Each expected note maps to at
+  most one detection and vice versa; leftovers are `extra` / `missed`.
+- A `late` candidate needs a SEARCH horizon wider than the in-band late bound, else a
+  correct-but-very-late note can't be found at all and the note reads `missed` while the
+  detection reads `extra`. Used `LATE_SEARCH_HORIZON_MULTIPLIER = 3 * W` for the search; the
+  true asymmetric bounds still decide hit-vs-late (`withinWindow`).
+- DELIBERATE rule: a WRONG-pitch detection past the late bound is NOT credited as `late`
+  (late is reserved for correct-pitch). Such a detection is released back to the extra pool,
+  so the expected note is `missed` and the stray pitch surfaces as `extra` — matching a
+  player who fumbled a wrong note off the beat.
+- Metric identities the tests pin: `hits + wrongPitch + late + missed === totalExpectedNotes`
+  (extras are separate, never in either denominator); `pitchAccuracy = (hits+late)/total`
+  (late is always correct-pitch by construction); `timingAccuracy = hits/total`. Zero-note
+  line guarded to return 0, not NaN.
+
+### Purity-check gotcha (worth flagging for any future pure module)
+
+`scripts/check-purity.sh` greps for the DOM globals with `grep -wE "document|window|navigator"`.
+The whole-word match flags the BARE lowercase word "window" ANYWHERE — including in prose
+comments and hyphenated phrases like "in-window" (the hyphen is a word boundary). It does
+NOT flag camelCase identifiers with a capital W (`toleranceWindow`, `withinWindow`) because
+the match is case-sensitive and "Window" inside an identifier has no word boundary, nor the
+plural "windows". Resolution: the evaluation module's prose/comments say "tolerance band" /
+"in-band" instead of "window"; the camelCase API names keep "Window". Swift note: this is a
+lint artifact, not a real constraint — name things naturally there.
+
+### Synthetic-take harness
+
+The whole pipeline is exercised hardware-free by the test suite (`evaluation.test.ts`,
+17 cases): all-hit, wrong_pitch, late within/beyond band, missed, extra, mixed
+one-of-each, one-to-one alignment, clarity-floor drop, sparse noteIndex join, asymmetry.
+The audio/UI layer can reuse the exact same `DetectedNote[]` shape to build a "fake take"
+button so Human Review Gate 3's results screen is demoable without a guitar.
+
+---
+
+## Milestone 4 — Audio input + pitch detection (src/audio additions)
+
+This section covers the LIVE audio capture + pitch-detection + onset-segmentation
+additions (the evaluation pipeline learnings are above; they were built in parallel
+and consume the `DetectedNote { midi, onsetMs, clarity }` records this layer emits).
+
+### Worklet bundling — we took the documented AnalyserNode fallback (LOUD)
+
+The brief (section 12) asks for pitch detection in an `AudioWorkletNode` (off the
+main thread) but explicitly PERMITS a main-thread `AnalyserNode` fallback for the
+throwaway if worklet bundling under electron-vite is too fiddly — and asks to
+document the fallback loudly. **We took the AnalyserNode fallback on purpose.** Why:
+
+- An AudioWorklet processor must be a SEPARATE module loaded by URL via
+  `audioWorklet.addModule(url)`. Under electron-vite that means a second rollup
+  input emitting a worklet bundle, then resolving its hashed asset URL at runtime
+  in BOTH dev (Vite dev server, `http://`) and prod (`file://` from disk) — and the
+  worklet global scope has no module/DOM niceties, so `pitchy` has to be bundled
+  INTO the worklet. That is real, brittle plumbing whose only payoff is moving the
+  FFT/McLeod pass off the main thread — which the brief says is explicitly NOT being
+  evaluated for latency/perf (sections 1 & 12). Not worth it for a prototype.
+- The AnalyserNode path is bullet-proof to bundle: one `AnalyserNode` (fftSize =
+  2048) + a `requestAnimationFrame` poll that copies `getFloatTimeDomainData` into a
+  buffer and runs `pitchy`'s `PitchDetector.findPitch(buffer, sampleRate)` on the
+  main thread. At ~16ms/frame, one McLeod pass over 2048 samples for a single
+  monophonic line is negligible CPU. `npm run build` stays trivially green.
+- Clean seam if a future build needs the worklet (e.g. CREPE): `LivePitchDetector`
+  owns the analysis loop; only the "get next time-domain frame + run detector" step
+  would move into a processor. The emitted-event contract (`onSample`/`onNote`) does
+  not change. **Swift note:** native Core Audio has none of this friction — do the
+  detection on an audio render callback / AVAudioEngine tap there.
+
+### pitchy API (v4.1.0) as actually used
+
+- `PitchDetector.forFloat32Array(inputLength)` → `findPitch(input, sampleRate)`
+  returns `[frequencyHz, clarity]`; returns `[0, 0]` when it finds no pitch.
+- We set `detector.clarityThreshold = 0.5` (pitchy's internal MPM `k`) BELOW our own
+  gating floor (0.6) so pitchy still RETURNS borderline frames and WE gate with our
+  named constant, rather than pitchy silently zeroing them.
+- We set `detector.minVolumeDecibels = -40` so silence/hum/fret-noise reads as
+  silence (clarity 0). Raise toward -30 if room noise causes spurious onsets at G3.
+- TS gotcha: `getFloatTimeDomainData` is typed `Float32Array<ArrayBuffer>`, so the
+  buffer must be constructed over an explicit `new ArrayBuffer(...)` (a bare
+  `new Float32Array(n)` infers `ArrayBufferLike` and fails strict typecheck).
+
+### Clarity threshold chosen (PLACEHOLDER — re-measure at Gate 3)
+
+`CLARITY_THRESHOLD = 0.6` (in `pitchDetector.ts`, mirrored by the segmenter's
+`clarityFloor` and numerically aligned with `evaluation/tuning.ts CLARITY_THRESHOLD`
+so a frame the detector accepts is one evaluation would accept). This is a guess —
+a clean plugged-in single guitar note SHOULD give pitchy clarity well above 0.9, so
+0.6 should comfortably pass real notes and reject noise, but **this MUST be measured
+against a real guitar through a real interface at Human Review Gate 3.** Procedure:
+play a clean chromatic scale, log per-frame `(freq, clarity, cents-off)`, and pick a
+floor that admits all clean notes while rejecting between-note noise. If clean-input
+clarity is poor / octave errors are common, that is the trigger to escalate to CREPE
+(brief section 4) — flag it to the human.
+
+### Onset segmentation (the PURE node-tested helper)
+
+`onsetSegmenter.ts` turns the continuous per-frame pitch stream into discrete
+`DetectedNote` onsets — it is DOM-free and unit-tested in node (`onsetSegmenter.test.ts`),
+as is `pitchMath.ts` (frequency↔MIDI, clarity gating). Rules + tunables (all named in
+`SegmenterConfig`, defaults in `DEFAULT_SEGMENTER_CONFIG`):
+
+- A new onset is emitted when (1) a stable pitch appears after silence, (2) the stable
+  pitch changes, or (3) the SAME pitch is re-struck after a silence gap longer than
+  `reArticulationGapMs` (default 60ms) — this is what lets two repeated quarter-note
+  C's register as two notes instead of one held note.
+- `stabilityFrames` (default 2) debounces the attack transient: pitchy's first frame
+  or two of a pluck often reads a harmonic / wrong octave. A note commits only after
+  N consecutive same-MIDI usable frames — BUT the reported onset is BACK-DATED to the
+  run's first frame (the true attack), so onsets stay tight to the beat for evaluation.
+- A single mid-sustain dropout frame (gap ≤ `reArticulationGapMs`) at the SAME pitch
+  is suppressed as a continuation, not re-articulated. (Found via a failing test: my
+  first cut re-emitted on ANY silence frame; fixed by tracking `lastEmittedMidi` and
+  the silence-gap length to distinguish a glitch from a real re-strike.)
+- Out-of-range detections (MIDI outside the guitar band [40,88]) are dropped as
+  octave/harmonic/noise artifacts before they ever reach the segmenter.
+- Frame counts assume a ~16ms (rAF) analysis hop; if a worklet with a different hop is
+  ever used, re-tune `stabilityFrames`. These are PLACEHOLDERS pending Gate-3 tuning.
+
+### Clock alignment (why detected onsets line up with expected onsets)
+
+The metronome is the authoritative musical clock; it anchors schedule t=0 to an
+`AudioContext` time (exposed via `Metronome.getStartAudioTime()`). `AudioGraph.start`
+takes that t0 and gives the detector a mapper `audioTime → (audioTime - t0)*1000` ms,
+so every detected onset is timestamped on the SAME ms clock as the expected onsets
+from `precomputeSchedule`. That is the whole reason evaluation's onset alignment is
+meaningful. getUserMedia is opened with echoCancellation / noiseSuppression /
+autoGainControl all FALSE — the browser's voice DSP mangles instrument input.
+
+### Measured round-trip latency — PLACEHOLDER (fill at Gate 3)
+
+> ROUND-TRIP LATENCY: __ ms (UNMEASURED — fill at Human Review Gate 3).
+> Method: play a note exactly on a metronome click, compare the detected onset's
+> schedule-ms to the click's schedule-ms; the median offset is the input→detection
+> latency (interface buffer + getUserMedia + AnalyserNode + rAF hop + segmenter
+> stabilityFrames back-dated out). Expect tens of ms (Web Audio in Electron is NOT
+> low-latency; brief sections 1 & 12 accept this and do not evaluate it). If detected
+> onsets are SYSTEMATICALLY late by a fixed amount, add that as a constant input-latency
+> offset to the detected→schedule mapper rather than widening the timing band.
+
+### Device picker + config persistence
+
+`enumerateInputDevices()` returns labels only AFTER mic permission is granted once
+(browser/Electron privacy rule), so the picker calls `ensureMicPermission()` (a probe
+getUserMedia that is immediately stopped) before enumerating. The chosen `deviceId`
+(and the one-time headphone-tip dismissal) persist via a tiny IPC: renderer →
+`window.sightReading.config.get/set` (preload `contextBridge`) → main `ipcMain.handle`
+`config:get`/`config:set` → a small JSON file `sr-config.json` in `app.getPath('userData')`.
+This is NOT the SQLite DB (Milestone 5); just a throwaway key/value file. Outside
+Electron (the `npm run dev` browser preview) `appConfig.ts` falls back to localStorage.
+
+### Headphone guidance
+
+Per section-18 default we do NOT attempt output-routing detection; we always show a
+one-time, non-blocking, dismissible tip that headphones improve detection (speaker
+playback bleeds the metronome/playback into the mic and pollutes pitch detection).
+Dismissal persists in the same config file.
+
+### Synthetic-take harness (hardware-free demo of the M4 path)
+
+`evaluationBridge.ts synthesizeTake(line, countInBars, opts)` turns a Line into a
+`DetectedNote[]` "as if played", with tunable `accuracy` / `timingBias` / `jitter` /
+`extraNotes`. The UI exposes a "Synthetic take (no hardware)" checkbox + accuracy
+slider; `useSightReading` injects those detections at their scheduled times during the
+run, so the real-time trailing colour, the results screen, and the three retry actions
+are all demoable WITHOUT a guitar. Node-tested in `evaluationBridge.test.ts` (perfect
+take → 100/100; late-bias-within-band still hits; degraded take classifies every note
+exactly once; extras surface). Only the LIVE pitch-detection ACCURACY needs the guitar
+(Gate 3) — everything downstream of `DetectedNote` is exercised in CI.
+
+### Real-time feedback colouring (OSMD)
+
+OSMD recolours via `note.NoteheadColor = '#hex'` then `osmd.render()`. We collect the
+source notes in score order once per load (`SourceMeasures → VerticalSourceStaffEntry
+Containers → StaffEntries → VoiceEntries → Notes`), which for our single-voice line is
+1:1 with `line.notes`, so we can recolour by note index. Colours (named in
+`FEEDBACK_COLORS`): green hit / red wrong / dim-grey missed. Live colouring trails the
+cursor by `TRAILING_EVALUATION_DELAY_MS` (100ms, from evaluation/tuning) — a note's
+colour commits only once the cursor has passed its onset by that delay, so a slightly-
+late-but-correct note registers as a hit rather than flashing missed. A full re-render
+per committed note is fine for a 4-bar line (a handful of renders); for much longer
+lines a future build should recolour the SVG element directly instead of re-rendering.
+
+### Synthetic-take harness — two NAMED deterministic buttons (Gate-3 preview)
+
+The accuracy-slider take (`synthesizeTake`) is RANDOM, so it can't guarantee "show me
+one of each colour" — bad for demoing/verifying the feedback. Added two DETERMINISTIC
+takes in `evaluationBridge.ts`, wired as the brief's two named buttons in App.tsx:
+
+  * **Simulate perfect take** (`synthesizePerfectTake`): one in-time, correct-pitch
+    detection per expected note → all green hits, 100/100.
+  * **Simulate take with errors** (`synthesizeKnownErrorTake`): a FIXED mix —
+    expected notes 0 & 1 → wrong-pitch (a semitone sharp, in time); note 2 → late;
+    note 3 → missed (no detection); plus one spurious EXTRA pitch; everything else a
+    clean hit. Same bytes every run, so each classification colour is reproducible.
+
+Both run the CURRENT line as a `first_read` through the SAME real-time-feedback +
+results path the mic drives, so colours animate with the cursor and the results screen
+shows the metrics — no hardware. Node-tested (8-quarter line asserts exactly 2 wrong /
+1 late / 1 missed / 1 extra; short-line graceful degradation; determinism).
+
+GOTCHA worth keeping for the Swift build: the `late` detection's offset is NOT a magic
+constant. A late note must land PAST the in-band late bound (1.4·W) yet INSIDE the
+aligner's search horizon (3·W) — too far and it's dropped as an `extra` while the note
+reads `missed`. So the offset is derived from the same `toleranceWindow(tempo,
+subdivision)` evaluation uses: `lateMs + symmetricMs` (= 2.4·W < 3·W). The spurious
+EXTRA is dropped halfway between the first two onsets (≥180ms), where it can't be
+greedily claimed by a real note (its absDelta loses to the on-onset real detections).
+Lesson: any "inject a known classification" fixture must respect the SAME tolerance
+math the classifier uses, or it silently lands in a different bucket.
+
+### Read-ahead dimming — CSS overlay, not OSMD internals
+
+Brief section 13 wants the region BEHIND the cursor "slightly dimmed" to pull the eye
+forward. Rather than fight OSMD's SVG (recolouring/opacity of passed noteheads conflicts
+with the green/red/grey feedback colours that ALSO live on those noteheads), we overlay
+a translucent, feathered-right-edge `<div>` (`.osmd-readahead-dim`) inside a relative
+`.osmd-wrap`, sized imperatively by `CursorHandle.setReadAheadDim(fraction)` where
+fraction = cursorIndex / lastIndex. It's pure CSS width/opacity (no OSMD re-render, no
+per-frame layout) and `pointer-events:none`. The dim is intentionally SOFT (~0.5 alpha,
+feathered last 15%) so the player can still glance back; cleared on clearColors (fresh
+line / retry). Feel note for the human to tune at Gate 3: if the dim band's hard left
+edge or the 0.5 alpha distracts, the gradient stops in `.osmd-readahead-dim` and the
+`frac` mapping in useSightReading are the two knobs — consider dimming only a fixed
+number of notes behind the cursor rather than the whole read region if the full-width
+wash feels heavy on long lines.
