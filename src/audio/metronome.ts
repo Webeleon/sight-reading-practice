@@ -40,6 +40,21 @@ const CLICK_GAIN_ACCENT = 0.5;
 const CLICK_GAIN_NORMAL = 0.3;
 const CLICK_DURATION_S = 0.04; // 40ms blip
 
+/** Melody-tone parameters ("Hear line"): a soft triangle tone, clearly quieter
+ *  than the click so it guides rather than dominates. Short attack/release so it
+ *  reads as a plucked-ish note, and each tone is capped to its note duration. */
+const MELODY_PEAK_GAIN = 0.12; // well below the click gains (0.3 / 0.5)
+const MELODY_ATTACK_S = 0.005;
+const MELODY_RELEASE_S = 0.03;
+/** Concert-A reference for MIDI -> frequency. */
+const A4_HZ = 440;
+const A4_MIDI = 69;
+
+/** frequency (Hz) for a MIDI note number (equal temperament, A4 = 440). */
+function midiToFreq(midi: number): number {
+  return A4_HZ * Math.pow(2, (midi - A4_MIDI) / 12);
+}
+
 /** Reported once per scheduling tick so the cursor can follow the audio clock. */
 export interface MetronomeTick {
   /** Seconds on the AudioContext clock at this report. */
@@ -71,6 +86,12 @@ export interface MetronomeOptions {
    *  2 = eighth-note subdivisions, 4 = sixteenths. Subdivision clicks are never
    *  accented; only true bar downbeats are. */
   subdivision?: number;
+  /** When true, the lookahead loop ALSO schedules one soft melody tone per LINE
+   *  note (from the schedule's per-note entries), so the player can hear the line
+   *  while reading. Rests (expectedMidi === null) and the count-in (entries begin
+   *  after it) are naturally skipped. Off by default (clicks only). Tones share the
+   *  SAME audio clock as the clicks, so they can never drift apart. */
+  melody?: boolean;
   /** Called every scheduling tick (~SCHEDULER_INTERVAL_MS) with the current
    *  audio-clock-derived musical time, so the cursor can advance. */
   onTick?: (tick: MetronomeTick) => void;
@@ -122,7 +143,7 @@ export class Metronome {
   private readonly schedule: Schedule;
   private readonly clicks: MetronomeClick[];
   private readonly opts: Required<
-    Pick<MetronomeOptions, 'countInBars' | 'subdivision'>
+    Pick<MetronomeOptions, 'countInBars' | 'subdivision' | 'melody'>
   > &
     MetronomeOptions;
   private readonly setIntervalFn: (cb: () => void, ms: number) => number;
@@ -132,6 +153,11 @@ export class Metronome {
   private startAudioTime = 0;
   /** Index of the next click not yet scheduled. */
   private nextClickToSchedule = 0;
+  /** Index of the next schedule entry (line note) not yet scheduled as a tone. */
+  private nextNoteToSchedule = 0;
+  /** Tone oscillators scheduled but not yet known-stopped, so stop() can silence
+   *  any pending/sounding melody tones (Stop/Next must cut the sound). */
+  private readonly activeToneOscillators = new Set<OscillatorNode>();
   private timerId: number | null = null;
   private running = false;
   private finishedFired = false;
@@ -140,9 +166,10 @@ export class Metronome {
     this.ctx = ctx;
     const countInBars = options.countInBars ?? DEFAULT_COUNT_IN_BARS;
     const subdivision = Math.max(1, Math.floor(options.subdivision ?? 1));
+    const melody = options.melody ?? false;
     this.schedule = precomputeSchedule(line, line.tempo, countInBars);
     this.clicks = buildClicks(this.schedule, subdivision);
-    this.opts = { ...options, countInBars, subdivision };
+    this.opts = { ...options, countInBars, subdivision, melody };
     // Default to the real timers; tests inject fakes.
     this.setIntervalFn =
       options.setIntervalFn ??
@@ -172,12 +199,14 @@ export class Metronome {
     this.running = true;
     this.finishedFired = false;
     this.nextClickToSchedule = 0;
+    this.nextNoteToSchedule = 0;
     // Anchor t=0 slightly ahead of "now" so the first click is schedulable.
     this.startAudioTime = this.ctx.currentTime + 0.1;
     console.log(
       `[AUDIO] metronome start: t0=${this.startAudioTime.toFixed(3)}s ` +
         `clicks=${this.clicks.length} countInBars=${this.opts.countInBars} ` +
-        `subdivision=${this.opts.subdivision} total=${this.schedule.totalDurationMs.toFixed(0)}ms`,
+        `subdivision=${this.opts.subdivision} melody=${this.opts.melody} ` +
+        `total=${this.schedule.totalDurationMs.toFixed(0)}ms`,
     );
     // Schedule once immediately so a fake-timer test sees output without waiting.
     this.scheduleTick();
@@ -187,7 +216,8 @@ export class Metronome {
     );
   }
 
-  /** Stop the metronome and clear the lookahead loop. Idempotent. */
+  /** Stop the metronome and clear the lookahead loop. Idempotent. Also silences
+   *  any melody tones already scheduled (so Stop/Next cuts pending sound). */
   stop(): void {
     if (!this.running) return;
     this.running = false;
@@ -195,6 +225,15 @@ export class Metronome {
       this.clearIntervalFn(this.timerId);
       this.timerId = null;
     }
+    // Silence any scheduled-but-not-finished melody tones immediately.
+    for (const osc of this.activeToneOscillators) {
+      try {
+        osc.stop();
+      } catch {
+        // Already stopped / never started — harmless.
+      }
+    }
+    this.activeToneOscillators.clear();
     console.log('[AUDIO] metronome stop');
   }
 
@@ -229,6 +268,27 @@ export class Metronome {
       // Guard against scheduling in the past (e.g. a long GC pause); clamp to now.
       this.scheduleClick(Math.max(when, this.ctx.currentTime), click.accented);
       this.nextClickToSchedule++;
+    }
+
+    // "Hear line": schedule one soft tone per line note landing in the window.
+    // Entries onsetMs are already past the count-in, so the count-in is silent.
+    if (this.opts.melody) {
+      const entries = this.schedule.entries;
+      while (
+        this.nextNoteToSchedule < entries.length &&
+        entries[this.nextNoteToSchedule]!.onsetMs < horizonMs
+      ) {
+        const entry = entries[this.nextNoteToSchedule]!;
+        if (entry.expectedMidi !== null) {
+          const when = this.startAudioTime + entry.onsetMs / 1000;
+          this.scheduleTone(
+            Math.max(when, this.ctx.currentTime),
+            entry.expectedMidi,
+            entry.durationMs / 1000,
+          );
+        }
+        this.nextNoteToSchedule++;
+      }
     }
 
     this.emitTick(nowMs);
@@ -281,6 +341,39 @@ export class Metronome {
     gain.connect(this.ctx.destination);
     osc.start(when);
     osc.stop(when + CLICK_DURATION_S);
+  }
+
+  /**
+   * Schedule a single soft melody tone for a line note at `when` (seconds, audio
+   * clock), pitched by MIDI number and capped to `noteDurationS` (its notated
+   * duration). Uses a triangle oscillator at a modest gain (clearly below the
+   * click) with a short attack/release so it reads as a guiding note, not a drone.
+   * The oscillator is tracked so stop() can silence it if Stop/Next happens before
+   * it finishes.
+   */
+  private scheduleTone(when: number, midi: number, noteDurationS: number): void {
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = midiToFreq(midi);
+    // Cap the tone to its note duration (leaving room for attack+release), but
+    // never shorter than the envelope so very short notes still articulate.
+    const sustainS = Math.max(MELODY_ATTACK_S + MELODY_RELEASE_S, noteDurationS);
+    const end = when + sustainS;
+    gain.gain.setValueAtTime(0, when);
+    gain.gain.linearRampToValueAtTime(MELODY_PEAK_GAIN, when + MELODY_ATTACK_S);
+    // Hold, then a short linear release down to silence by the note's end.
+    gain.gain.setValueAtTime(MELODY_PEAK_GAIN, Math.max(when + MELODY_ATTACK_S, end - MELODY_RELEASE_S));
+    gain.gain.linearRampToValueAtTime(0, end);
+    osc.connect(gain);
+    gain.connect(this.ctx.destination);
+    osc.start(when);
+    osc.stop(end);
+    // Track for stop(); drop the reference once it ends naturally.
+    this.activeToneOscillators.add(osc);
+    osc.onended = (): void => {
+      this.activeToneOscillators.delete(osc);
+    };
   }
 }
 

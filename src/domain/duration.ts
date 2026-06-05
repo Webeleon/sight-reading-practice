@@ -69,3 +69,39 @@ export function makeDuration(
 export function durationToTicks(d: Duration): number {
   return d.ticks;
 }
+
+// Base durations searched (longest first) when reconstructing a single note from a
+// tick count. We do NOT search thirtySecond here because nothing in the pipeline
+// merges down to it; add it if a future motif needs it.
+const RECONSTRUCT_BASES: ReadonlyArray<BaseDuration> = [
+  'whole',
+  'half',
+  'quarter',
+  'eighth',
+  'sixteenth',
+  'thirtySecond',
+];
+
+const RECONSTRUCT_DOTS: ReadonlyArray<0 | 1 | 2> = [0, 1, 2];
+
+/**
+ * Find the single notatable Duration (base + dots, optionally within the given tuplet
+ * ratio) whose authoritative tick count equals `ticks`, or `null` if no single note
+ * expresses exactly that many ticks. This is the inverse of computeTicks: it exists so
+ * code that combines durations (e.g. rhythm variations) can produce a note whose
+ * base/dots/tuplet actually MATCH its tick count — a mismatch makes renderers (OSMD /
+ * MuseScore) draw the wrong visual length, desyncing notation from the tick clock.
+ *
+ * Not every tick count is a single note (e.g. an eighth + a half = 1200 ticks is a
+ * tied pair, not one note); callers must handle the `null` case (e.g. skip the merge).
+ */
+export function ticksToDuration(ticks: number, tuplet?: Tuplet): Duration | null {
+  for (const base of RECONSTRUCT_BASES) {
+    for (const dots of RECONSTRUCT_DOTS) {
+      if (computeTicks(base, dots, tuplet) === ticks) {
+        return makeDuration(base, dots, tuplet);
+      }
+    }
+  }
+  return null;
+}

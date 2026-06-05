@@ -12,9 +12,15 @@ import type { Chord } from '../domain/chord.js';
 import type { Pitch } from '../domain/pitch.js';
 import type { Key } from '../domain/key.js';
 import type { TimeSignature } from '../domain/timeSignature.js';
-import { makeDuration } from '../domain/duration.js';
-import { FOUR_FOUR, THREE_FOUR } from '../domain/timeSignature.js';
+import {
+  makeDuration,
+  computeTicks,
+  type BaseDuration,
+} from '../domain/duration.js';
+import { FOUR_FOUR, THREE_FOUR, ticksPerBar } from '../domain/timeSignature.js';
 import { makeNeckPosition } from '../domain/neckPosition.js';
+import { generateLine } from '../generator/generateLine.js';
+import type { LineConfig } from '../generator/config.js';
 
 // --- Fixture helpers ---------------------------------------------------------
 
@@ -505,5 +511,145 @@ describe('serializeLineToMusicXML — voice and staff', () => {
     ]);
     const xml = serializeLineToMusicXML(line);
     expect(count(xml, '<voice>1</voice>')).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Each rendered <measure> must FILL THE BAR two ways: by <duration> (the tick
+// total) AND by the VISUAL notation (<type> + <dot/> + <time-modification>),
+// because renderers (OSMD / MuseScore) lay notes out from the notation, not from
+// <duration>. A note whose <type>/<dots>/<time-modification> disagrees with its
+// <duration> makes a bar look short (e.g. a "3-beat" 4/4 bar) and desyncs the
+// tick-driven cursor from the drawn notes. (Regression: this was the bug a human
+// saw — a 4/4 bar that rendered as quarter + half = 3 beats, with a triplet line.)
+// ---------------------------------------------------------------------------
+
+const TYPE_TO_BASE: Readonly<Record<string, BaseDuration>> = {
+  whole: 'whole',
+  half: 'half',
+  quarter: 'quarter',
+  eighth: 'eighth',
+  '16th': 'sixteenth',
+  '32nd': 'thirtySecond',
+};
+
+/** Split a serialized score into per-measure XML chunks (the inner content of each
+ *  <measure>...</measure>), in order. */
+function measureChunks(xml: string): string[] {
+  return [...xml.matchAll(/<measure\b[^>]*>([\s\S]*?)<\/measure>/g)].map((m) => m[1]!);
+}
+
+/** Sum of <duration> values in one measure chunk (the authoritative tick total). */
+function measureDurationSum(measure: string): number {
+  return [...measure.matchAll(/<duration>(\d+)<\/duration>/g)].reduce(
+    (acc, m) => acc + Number(m[1]),
+    0,
+  );
+}
+
+/**
+ * Sum of the VISUAL tick length of every <note> in one measure, derived ONLY from its
+ * notation (<type>, <dot/>, <time-modification>) — i.e. exactly what a renderer draws.
+ * Must equal the bar length, otherwise the bar looks wrong even if <duration> is right.
+ */
+function measureVisualSum(measure: string): number {
+  const notes = [...measure.matchAll(/<note>([\s\S]*?)<\/note>/g)].map((m) => m[1]!);
+  let sum = 0;
+  for (const n of notes) {
+    const type = /<type>([^<]+)<\/type>/.exec(n)?.[1];
+    if (type === undefined) {
+      throw new Error(`[TEST] note has no <type>: ${n}`);
+    }
+    const base = TYPE_TO_BASE[type];
+    if (base === undefined) {
+      throw new Error(`[TEST] unknown <type> ${type}`);
+    }
+    const dots = (n.match(/<dot\/>/g)?.length ?? 0) as 0 | 1 | 2;
+    const actual = /<actual-notes>(\d+)<\/actual-notes>/.exec(n)?.[1];
+    const normal = /<normal-notes>(\d+)<\/normal-notes>/.exec(n)?.[1];
+    const tuplet =
+      actual !== undefined && normal !== undefined
+        ? { numerator: Number(actual), denominator: Number(normal) }
+        : undefined;
+    sum += computeTicks(base, dots, tuplet);
+  }
+  return sum;
+}
+
+describe('serializeLineToMusicXML — every measure fills the bar (duration AND visual)', () => {
+  it('hand-built triplet bar: both <duration> and visual notation sum to the bar', () => {
+    // An eighth-triplet group (3*160=480) then a dotted half (1440) -> 1920 ticks.
+    const trip = makeDuration('eighth', 0, { numerator: 3, denominator: 2 });
+    const line = buildLine(C_MAJOR, FOUR_FOUR, 1, [
+      note({ pitch: p('C', 'natural', 4), duration: trip, startTick: 0, isStrongBeat: true }),
+      note({ pitch: p('D', 'natural', 4), duration: trip, startTick: 160 }),
+      note({ pitch: p('E', 'natural', 4), duration: trip, startTick: 320 }),
+      note({ pitch: p('F', 'natural', 4), duration: makeDuration('half', 1), startTick: 480 }),
+    ]);
+    const xml = serializeLineToMusicXML(line);
+    const tpb = ticksPerBar(FOUR_FOUR);
+    const [measure] = measureChunks(xml);
+    expect(measureDurationSum(measure!)).toBe(tpb);
+    expect(measureVisualSum(measure!)).toBe(tpb);
+  });
+
+  it('generated lines (incl. triplets) — EVERY measure fills the bar both ways', () => {
+    const tpb = ticksPerBar(FOUR_FOUR);
+    const keys: Key[] = [C_MAJOR, G_MAJOR, A_MINOR];
+    const positions = [
+      makeNeckPosition(1, 6, 0, 5, 'open'),
+      makeNeckPosition(1, 6, 4, 8, 'V'),
+    ];
+    const barCounts = [2, 4];
+    // difficulty 4 admits the triplet/sixteenth motifs the property test never reaches.
+    const difficulties: LineConfig['difficulty'][] = [3, 4];
+    const densities: LineConfig['accidentalsDensity'][] = ['none', 'low', 'medium'];
+
+    let total = 0;
+    let withTriplet = 0;
+    let seed = 0;
+    for (const key of keys) {
+      for (const position of positions) {
+        for (const barCount of barCounts) {
+          for (const difficulty of difficulties) {
+            for (const accidentalsDensity of densities) {
+              for (let r = 0; r < 6; r++) {
+                const cfg: LineConfig = {
+                  key,
+                  timeSignature: FOUR_FOUR,
+                  position,
+                  tempo: 90,
+                  barCount,
+                  difficulty,
+                  accidentalsDensity,
+                };
+                const line = generateLine(cfg, seed++, '2026-06-04T00:00:00.000Z');
+                total++;
+                if (line.notes.some((n) => n.duration.tuplet !== undefined)) {
+                  withTriplet++;
+                }
+                const xml = serializeLineToMusicXML(line);
+                const chunks = measureChunks(xml);
+                expect(chunks.length).toBe(barCount);
+                chunks.forEach((chunk, mi) => {
+                  expect(
+                    measureDurationSum(chunk),
+                    `seed=${seed - 1} measure ${mi} <duration> sum`,
+                  ).toBe(tpb);
+                  expect(
+                    measureVisualSum(chunk),
+                    `seed=${seed - 1} measure ${mi} VISUAL (type/dots/tuplet) sum`,
+                  ).toBe(tpb);
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+    // Confirm the run actually exercised triplet motifs (otherwise the regression
+    // path wouldn't be covered).
+    expect(total).toBeGreaterThan(100);
+    expect(withTriplet, 'expected some generated lines to contain triplets').toBeGreaterThan(0);
   });
 });

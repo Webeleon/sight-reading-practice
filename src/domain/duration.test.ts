@@ -3,6 +3,8 @@ import {
   TICKS_PER_QUARTER,
   makeDuration,
   durationToTicks,
+  ticksToDuration,
+  computeTicks,
 } from './duration.js';
 
 describe('TICKS_PER_QUARTER', () => {
@@ -71,5 +73,44 @@ describe('JSON round-trip', () => {
     const d = makeDuration('eighth', 1, { numerator: 3, denominator: 2 });
     const round = JSON.parse(JSON.stringify(d));
     expect(round).toEqual(d);
+  });
+});
+
+describe('ticksToDuration — inverse of computeTicks for single notes', () => {
+  it('reconstructs plain base durations', () => {
+    expect(ticksToDuration(480)).toEqual(makeDuration('quarter'));
+    expect(ticksToDuration(960)).toEqual(makeDuration('half'));
+    expect(ticksToDuration(240)).toEqual(makeDuration('eighth'));
+    expect(ticksToDuration(1920)).toEqual(makeDuration('whole'));
+  });
+
+  it('reconstructs dotted durations', () => {
+    expect(ticksToDuration(720)).toEqual(makeDuration('quarter', 1));
+    expect(ticksToDuration(1440)).toEqual(makeDuration('half', 1));
+    expect(ticksToDuration(360)).toEqual(makeDuration('eighth', 1));
+  });
+
+  it('reconstructs tuplet durations within the given ratio', () => {
+    const trip = { numerator: 3, denominator: 2 };
+    // two eighth-triplets = 320 ticks = one quarter-triplet in the same ratio.
+    expect(ticksToDuration(320, trip)).toEqual(makeDuration('quarter', 0, trip));
+    // two quarter-triplets = 640 = one half-triplet.
+    expect(ticksToDuration(640, trip)).toEqual(makeDuration('half', 0, trip));
+  });
+
+  it('returns a Duration whose ticks equal the requested ticks', () => {
+    for (const t of [120, 240, 360, 480, 720, 960, 1440, 1920]) {
+      const d = ticksToDuration(t);
+      expect(d).not.toBeNull();
+      expect(d!.ticks).toBe(t);
+      expect(computeTicks(d!.base, d!.dots, d!.tuplet)).toBe(t);
+    }
+  });
+
+  it('returns null when no single note expresses the tick count (eighth + half = 1200)', () => {
+    expect(ticksToDuration(1200)).toBeNull();
+    // 240+960 (an eighth tied to a half) is not one note.
+    expect(ticksToDuration(840)).toEqual(makeDuration('quarter', 2)); // double-dotted IS one note
+    expect(ticksToDuration(1000)).toBeNull();
   });
 });

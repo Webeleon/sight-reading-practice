@@ -130,10 +130,86 @@ body {
 
 /* OSMD renders dark notation; give it a light background so it reads clearly. */
 .staff-area {
+  position: relative; /* anchors the count-in overlay */
   background: #f6f7f9;
   border-radius: 8px;
   padding: 12px;
   overflow-x: auto;
+}
+
+/* ---- Count-in visual (Item 3): a prominent overlay over the staff during the
+   2-bar count-in. Disappears the instant the line starts (phase !== countIn). */
+.countin-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  background: rgba(21, 23, 28, 0.82);
+  border-radius: 8px;
+  z-index: 5;
+  pointer-events: none;
+}
+
+.countin-label {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.countin-number {
+  font-size: 120px;
+  font-weight: 800;
+  line-height: 1;
+  color: #ffd166;
+  /* Re-keyed each beat (key={countInBeat}) so this pulse re-fires per number. */
+  animation: countin-pulse 0.45s ease-out;
+}
+
+@keyframes countin-pulse {
+  0% {
+    transform: scale(0.55);
+    opacity: 0.2;
+  }
+  45% {
+    transform: scale(1.18);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.countin-dots {
+  display: flex;
+  gap: 12px;
+}
+
+.countin-dot {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #3a3f47;
+  transition: background 80ms linear, transform 80ms linear;
+}
+
+.countin-dot.is-current {
+  background: #ffd166;
+  transform: scale(1.35);
+}
+
+/* "Hear line" transport toggle (Item 2). */
+.hear-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--muted);
 }
 
 .osmd-wrap {

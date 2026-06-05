@@ -1391,3 +1391,148 @@ Electron MAIN process, so two main-bundle bugs slipped through until `npm run de
 
 Verification lesson: for Electron, always smoke-test the real launch
 (`npm run preview` / `npm run dev`), not just a browser-served renderer.
+
+## Bar-fill desync bug: duration notation must match its tick count (found by read-along)
+
+A human saw a rendered 4/4 line whose 2nd bar looked like quarter + half = 3 beats
+(missing a beat), in a line that contained a triplet; the cursor then desynced from the
+notes. The 1000-line property test was GREEN because it only summed `duration.ticks`
+grouped by `barIndex` — which was always correct.
+
+**Root cause (generator layer):** `planRhythm`'s `varyDurations` rhythm variations
+(`augmentation` merges the first two events, `omission` extends the previous note over the
+last) synthesized a merged `Duration` that kept the FIRST/PREV note's `base`+`dots` but
+overwrote `ticks` with the merged sum:
+`const merged: Duration = { base: a.base, dots: a.dots, ticks: mergedTicks }`.
+So e.g. an eighth (240) + a half (960) became `{base:'eighth', dots:0, ticks:1200}`, and
+two triplet eighths (160+160) became `{base:'eighth', tuplet:3/2, ticks:320}`. The
+`ticks` were right, the NOTATION was wrong.
+
+**Why it desyncs:** the MusicXML serializer writes `<duration>=ticks` (correct) but
+`<type>`/`<dot/>`/`<time-modification>` straight from `base`/`dots`/`tuplet`. OSMD and
+MuseScore lay notes out from the NOTATION, not `<duration>`, so a `{eighth, ticks:1200}`
+note is drawn 240 ticks wide while 1200 ticks of musical (cursor) time pass over it. The
+bar then visually under-fills (e.g. 1440 instead of 1920 → looks like 3 beats) and the
+tick-driven cursor drifts off the drawn notes. The triplet was incidental: roughly 1 in 4
+generated lines (1475/5760 in the diagnostic) had at least one such note across ALL
+difficulties, not just triplet ones — the human just happened to notice it on a triplet bar.
+
+**Fix:** added `ticksToDuration(ticks, tuplet?)` to `domain/duration.ts` — the inverse of
+`computeTicks`, returning the single notatable `Duration` (base+dots within an optional
+tuplet ratio) for a tick count, or `null` when no single note expresses it (e.g.
+eighth+half=1200 is a tied pair). `planRhythm` now merges via `mergeDurations` which uses
+it and SKIPS the variation (returns the bar unchanged) when the merge isn't a single note.
+Result: every emitted note's `base/dots/tuplet` reconstructs its own `ticks`.
+
+**Test-gap closure (this is why it slipped through):**
+- `musicxml/serialize.test.ts`: new block parses the output and asserts every `<measure>`
+  fills the bar BOTH by sum(`<duration>`) AND by VISUAL notation (sum of
+  `computeTicks(<type>,<dot/>,<time-modification>)`) — the visual sum is the one that
+  catches this class of bug. Runs over generated lines including triplet motifs
+  (difficulty 4, which the property test never reached — it only used difficulty 3).
+- `generator/property.test.ts`: each non-fallback line now also asserts
+  `computeTicks(base,dots,tuplet) === duration.ticks`, `barIndex === floor(startTick/tpb)`,
+  and full contiguity (notes tile `[0, barCount*tpb)` with no gaps/overlaps, starting at 0,
+  ending exactly at the line end).
+- `generator/stages.test.ts`: `planRhythm` slot-notation invariant over 200 seeds at
+  difficulty 4, plus a focused regression injecting a Charleston motif whose `omission`
+  merge would be eighth+half=1200 (the exact non-notatable case) and asserting no
+  `{eighth, ticks:1200}` slot is ever produced while bars still fill.
+- `domain/duration.test.ts`: unit tests for `ticksToDuration` (plain/dotted/tuplet
+  reconstruction and the `null` non-notatable cases).
+
+**General lesson:** when `ticks` is "authoritative, derived" from `base/dots/tuplet`, any
+code that fabricates a `Duration` by hand (rather than via `makeDuration`/`ticksToDuration`)
+can silently break the notation↔ticks invariant. The serializer trusted that invariant.
+For the Swift rewrite: make `Duration` only constructible through a factory that derives
+`ticks`, so a hand-set mismatch is unrepresentable.
+
+---
+
+## Read-along feedback round (M4 UX): cursor restore off-by-one, melody, count-in visual
+
+**OSMD cursor.reset() lands ON entry 0, not before it.** Both `OsmdView.moveTo()` and
+`OsmdView.colorNotes()` rebuild the cursor position after a `reset()` (colorNotes does it
+after the recolour `render()`). The correct pattern is `reset(); let cur = 0; while (cur <
+target) { next(); cur++ }`. The old `colorNotes()` restore anchored `cur = -1` and ran the
+loop one extra time, leaving the cursor on `keepIndex + 1` — so after every trailing-colour
+render during play the cursor visibly jumped one note ahead. `moveTo()` was already fixed;
+`colorNotes()` had the same bug independently. Lesson for the Swift rewrite: there should be
+ONE "seek cursor to logical index N" helper, not two copies of the reset/step loop.
+
+**"Hear line" melody shares the metronome's lookahead loop (never a second clock).** Adding
+melody as a `melody?: boolean` on the EXISTING metronome (rather than a separate player) means
+the tones are scheduled in the same `scheduleTick()` pass against `AudioContext.currentTime`,
+so click and tone can never drift relative to each other. Per-note data comes free from
+`schedule.entries` (onsetMs/durationMs/expectedMidi) which are already past the count-in, so
+the count-in is silent with no special-casing, and rests (`expectedMidi === null`) are skipped.
+Soft triangle at gain 0.12 (clicks are 0.3/0.5) reads as a guide, not a competing voice.
+TRACK scheduled tone oscillators in a Set and `stop()` them in metronome.stop(), because
+Stop/Next must cut tones that were scheduled to sound up to LOOKAHEAD_MS in the future —
+otherwise a stopped run keeps ringing. `onended` clears the Set entry so it doesn't grow.
+
+**Count-in visual is derived, not a separate timer.** `countInBeat` is computed in the same
+rAF tick from `elapsedMs` and `beatMs = countInOffsetMs / (countInBars * timeSignature.beats)`
+(`floor(elapsed/beatMs)+1`, clamped). No extra interval; it rides the audio clock like
+everything else. The overlay is gated purely on `phase === 'countIn'`, so it vanishes the
+instant the line starts. `key={countInBeat}` on the big number re-mounts it each beat to
+re-fire the CSS pulse animation — a cheap way to pulse without JS animation state.
+
+**Testing oscillator types via the fake clock.** metronome.test.ts's fake oscillator now
+records `type` alongside `when/freq`, so melody tones (triangle, ~261.6 Hz for C4) are
+distinguishable from clicks (sine-default, 1000/1500 Hz) — the melody tests assert tone
+count, pitch, audio-clock onset times, rest-skipping, and that stop() issues an extra stop()
+on tracked tones. Melody defaults OFF in the metronome so the pre-existing click tests are
+unaffected (the UI defaults the checkbox ON).
+
+---
+
+## Verification (post read-along, 2026-06-05)
+
+**Two independent "bar fills exactly" assertions exist and must both stay green.** The
+generator property test (`src/generator/property.test.ts`, 1080 lines = 6 keys × 3 positions ×
+2 barCounts × 3 densities × 10 reps, gated `>= 1000`) asserts per-bar `sum(duration.ticks)
+=== ticksPerBar(4/4)=1920`, plus the NEW invariants: `n.barIndex === floor(startTick/tpb)`,
+contiguous tiling of `[0, barCount*tpb)` with no gaps/overlaps, and
+`computeTicks(base,dots,tuplet) === duration.ticks` per note (notation must reconstruct the
+tick count). The serializer test (`src/musicxml/serialize.test.ts`) asserts the SAME bar-fill
+at the XML layer TWO ways per `<measure>`: `measureDurationSum` (sum of `<duration>`) AND
+`measureVisualSum` (tick length derived only from `<type>`/`<dot/>`/`<time-modification>`).
+The visual sum is the one that caught the human-observed regression — a 4/4 triplet bar that
+rendered as quarter+half=3 beats because the notation disagreed with `<duration>`. Renderers
+(OSMD/MuseScore) lay out from notation, not `<duration>`, so both sums must equal 1920.
+
+**Triplet coverage is asserted, not assumed.** The serializer regression test
+"generated lines (incl. triplets) — EVERY measure fills the bar both ways" runs difficulty 3
+AND 4 (4 admits triplet/16th motifs the property test's difficulty-3 matrix never reaches)
+and ends with `expect(withTriplet).toBeGreaterThan(0)` — if a future tuning change stops
+emitting triplets, the test fails loudly rather than silently skipping the regression path.
+
+## Adversarial re-verification of the four read-along fixes (independent pass)
+
+A throwaway `scripts/_verify_measures.ts` (deleted after running) generated 1296 then
+3456 lines across varied keys (incl. F# major / C minor), positions, barCounts {2,4},
+accidental densities {none,low,medium,high}, and difficulties {3,4,5} so triplets were
+actually exercised (192 / 524 lines carried tuplets). For every line it serialized to
+MusicXML, regex-parsed each `<measure>`, summed `<duration>`, and cross-checked
+`barIndex === floor(startTick/1920)` on the Line itself. Zero counterexamples on both runs:
+every measure sums to exactly 1920, measure count always equals barCount, barIndex always
+matches. This is an INDEPENDENT confirmation of the in-repo property test (the serializer
+groups by `n.barIndex` and writes `<duration>=duration.ticks`, divisions=480, so the two
+invariants are coupled but verified from opposite ends here).
+
+**Count-in beat math is exact, not just plausible.** `beatMs = countInOffsetMs/totalBeats`
+algebraically reduces to `barDurationMs/beats` = the metronome's own click spacing, so the
+UI count-in indicator and the audio clicks share one grid by construction. Verified
+numerically at 120 BPM / 2 count-in bars: 8 count-in beats, indicator goes 1..8 across the
+count-in, each `isCountIn` click maps to beat (i+1), beat==8 just before line start and
+==0 at/after `countInOffsetMs` (which equals the first line note's onsetMs, 4000ms). The
+`elapsedMs < 0` clamp keeps beat==1 during the start()-anchor's 0.1s pre-roll.
+
+**Cursor reset off-by-one: the fix holds in BOTH places.** `moveTo(0)` from the parked
+state (cursorIndexRef=-1) hits the `else if (cur < 0) cur = 0` branch and runs the
+`while (cur < clamped)` loop zero times — lands ON entry 0 with no extra `next()`.
+`colorNotes()`'s post-render restore uses `cur=0` after `cursor.reset()` and the same
+`while (cur < keepIndex)` guard, so keepIndex=0 also stays on entry 0. In the tick loop
+`moveTo` runs BEFORE `commitTrailingColors` each frame, so `keepIndex` always reflects the
+just-set index. No path advances the cursor past its logical index after a reset.

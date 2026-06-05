@@ -48,6 +48,10 @@ export interface UseSightReadingOptions {
   countInBars?: number;
   /** Selected input device for live detection (undefined = system default). */
   inputDeviceId?: string;
+  /** When true, the metronome ALSO plays a soft tone per line note ("Hear line")
+   *  so the player can hear the melody while reading. Synced to the same audio
+   *  clock as the clicks (never drifts). Default handled by the caller. */
+  melody?: boolean;
   /**
    * When provided, run in SYNTHETIC mode: instead of opening the mic, replay these
    * detections (already on the schedule clock) for evaluation + colouring. This is
@@ -65,6 +69,12 @@ export interface UseSightReading {
   attemptType: AttemptType;
   /** Live count of detected notes so far (for an on-screen readout). */
   detectedCount: number;
+  /** 1-based current count-in beat while phase==='countIn' (0 when not counting
+   *  in). Drives the on-screen count-in indicator. */
+  countInBeat: number;
+  /** Total number of count-in beats (countInBars * timeSignature.beats). 0 until
+   *  a run that has a line begins. */
+  countInTotalBeats: number;
   /**
    * Begin a run. `type` records the attempt_type for fluency accounting.
    * `runOptions.line` overrides the hook's `line` for THIS run (so a Retry-slower
@@ -96,6 +106,7 @@ export function useSightReading(
     countInBars = DEFAULT_COUNT_IN_BARS,
     inputDeviceId,
     syntheticTake = null,
+    melody = false,
   } = options;
 
   const [phase, setPhase] = useState<Phase>('idle');
@@ -103,6 +114,8 @@ export function useSightReading(
   const [result, setResult] = useState<EvaluationResult | null>(null);
   const [attemptType, setAttemptType] = useState<AttemptType>('first_read');
   const [detectedCount, setDetectedCount] = useState(0);
+  const [countInBeat, setCountInBeat] = useState(0);
+  const [countInTotalBeats, setCountInTotalBeats] = useState(0);
 
   const metronomeRef = useRef<Metronome | null>(null);
   const graphRef = useRef<AudioGraph | null>(null);
@@ -130,6 +143,7 @@ export function useSightReading(
     graphRef.current?.stop();
     graphRef.current = null;
     setIsRunning(false);
+    setCountInBeat(0);
   }, []);
 
   useEffect(() => stop, [stop]);
@@ -164,6 +178,10 @@ export function useSightReading(
       setAttemptType(type);
       setResult(null);
       setDetectedCount(0);
+      // Count-in indicator: total beats across the count-in bars.
+      const totalCountInBeats = countInBars * runLine.timeSignature.beats;
+      setCountInTotalBeats(totalCountInBeats);
+      setCountInBeat(totalCountInBeats > 0 ? 1 : 0);
       setPhase('countIn');
 
       // Synthetic take: queue the detections for time-ordered injection.
@@ -184,6 +202,7 @@ export function useSightReading(
 
       const metro = new Metronome(ctx, runLine, {
         countInBars,
+        melody,
         onFinished: () => {
           finishedRef.current = true;
         },
@@ -214,6 +233,20 @@ export function useSightReading(
         if (!m || !sched) return;
         const elapsedMs = m.elapsedMs();
         const inCountIn = elapsedMs < sched.countInOffsetMs;
+
+        // Count-in visual: the 1-based current beat, derived from elapsed time and
+        // the per-beat duration (countInOffsetMs / totalBeats). Clamp to [1,total].
+        if (inCountIn && totalCountInBeats > 0) {
+          const beatMs = sched.countInOffsetMs / totalCountInBeats;
+          const clampedMs = elapsedMs < 0 ? 0 : elapsedMs;
+          const beat = Math.min(
+            totalCountInBeats,
+            Math.floor(clampedMs / beatMs) + 1,
+          );
+          setCountInBeat(beat);
+        } else {
+          setCountInBeat(0);
+        }
 
         // Inject any synthetic detections whose onset time has now passed.
         if (pendingSyntheticRef.current.length > 0) {
@@ -331,7 +364,7 @@ export function useSightReading(
     },
     // detectedCount intentionally excluded (read via ref inside tick).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [line, countInBars, inputDeviceId, syntheticTake, stop],
+    [line, countInBars, inputDeviceId, syntheticTake, melody, stop],
   );
 
   return {
@@ -340,6 +373,8 @@ export function useSightReading(
     result,
     attemptType,
     detectedCount,
+    countInBeat,
+    countInTotalBeats,
     start,
     stop,
   };

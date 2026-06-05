@@ -8,6 +8,7 @@
 // Pure module: no electron/react/DOM, seeded-PRNG only, no `any`.
 
 import type { Duration } from '../domain/index.js';
+import { ticksToDuration } from '../domain/index.js';
 import type { PhraseStructure, RhythmicMotifPlan } from '../domain/index.js';
 import type { RhythmicMotifEntry } from '../content/motifLibrary.js';
 import type { LineConfig } from './config.js';
@@ -38,8 +39,32 @@ function candidateMotifs(
   return out;
 }
 
+/**
+ * Merge two adjacent durations into a SINGLE notatable note of their combined length.
+ * Returns null when the combined length is not a single note (e.g. eighth + half =
+ * 1200 ticks is a tied pair, not one note) — the caller then skips the merge rather
+ * than emit a note whose base/dots/tuplet disagree with its ticks. Both inputs share a
+ * tuplet context within a motif run, so the merged note keeps that tuplet ratio; a
+ * mismatch between the two tuplets is treated as un-mergeable.
+ */
+function mergeDurations(a: Duration, b: Duration): Duration | null {
+  const aRatio = a.tuplet;
+  const bRatio = b.tuplet;
+  const sameTuplet =
+    (aRatio === undefined && bRatio === undefined) ||
+    (aRatio !== undefined &&
+      bRatio !== undefined &&
+      aRatio.numerator === bRatio.numerator &&
+      aRatio.denominator === bRatio.denominator);
+  if (!sameTuplet) return null;
+  return ticksToDuration(a.ticks + b.ticks, aRatio);
+}
+
 /** Apply a subtle variation to a bar's durations. Returns the (possibly) altered
- *  durations; the total ALWAYS still sums to one bar. */
+ *  durations; the total ALWAYS still sums to one bar, and EVERY returned duration's
+ *  base/dots/tuplet matches its tick count (so renderers draw the right lengths).
+ *  When a merge would not be a single notatable note, the variation is skipped and the
+ *  original durations are returned unchanged. */
 function varyDurations(
   durations: ReadonlyArray<Duration>,
   kind: 'displacement' | 'augmentation' | 'omission',
@@ -47,35 +72,27 @@ function varyDurations(
   const ds = durations.map((d) => ({ ...d }));
   switch (kind) {
     case 'displacement': {
-      // Rotate the durations by one so onsets shift; total tick sum is preserved.
+      // Rotate the durations by one so onsets shift; total tick sum is preserved and
+      // each duration is carried verbatim (already notatable).
       if (ds.length <= 1) return ds;
       const first = ds.shift()!;
       ds.push(first);
       return ds;
     }
     case 'augmentation': {
-      // Merge the first two events into one of their combined length (a longer note
-      // in place of two shorter ones). Preserves total bar length.
+      // Merge the first two events into one note of their combined length (a longer
+      // note in place of two shorter ones). Preserves total bar length.
       if (ds.length < 2) return ds;
-      const a = ds[0]!;
-      const b = ds[1]!;
-      const mergedTicks = a.ticks + b.ticks;
-      // Keep it simple & JSON-safe: synthesize a duration record carrying the merged
-      // tick count. base/dots are notational hints; ticks is authoritative downstream.
-      const merged: Duration = { base: a.base, dots: a.dots, ticks: mergedTicks };
+      const merged = mergeDurations(ds[0]!, ds[1]!);
+      if (merged === null) return ds; // not a single note: skip the variation
       return [merged, ...ds.slice(2)];
     }
     case 'omission': {
-      // Turn the LAST event into a rest by merging it into the previous note's length,
-      // i.e. drop an onset. Preserves total bar length. (We extend the previous note.)
+      // Drop the last onset by extending the previous note over it (one longer note).
+      // Preserves total bar length.
       if (ds.length < 2) return ds;
-      const last = ds[ds.length - 1]!;
-      const prev = ds[ds.length - 2]!;
-      const merged: Duration = {
-        base: prev.base,
-        dots: prev.dots,
-        ticks: prev.ticks + last.ticks,
-      };
+      const merged = mergeDurations(ds[ds.length - 2]!, ds[ds.length - 1]!);
+      if (merged === null) return ds; // not a single note: skip the variation
       return [...ds.slice(0, ds.length - 2), merged];
     }
   }

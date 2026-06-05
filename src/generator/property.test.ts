@@ -18,6 +18,7 @@ import {
   ticksPerBar,
   pitchToMidi,
   pitchClass,
+  computeTicks,
 } from '../domain/index.js';
 import type { Key } from '../domain/index.js';
 import { isPlayableInPosition } from '../fretboard/index.js';
@@ -155,6 +156,42 @@ describe('property: 1,000+ lines across varied configs', () => {
               for (let bar = 0; bar < barCount; bar++) {
                 expect(perBar.get(bar)).toBe(tpb);
               }
+
+              // --- every note's duration notation matches its tick count ---
+              // base/dots/tuplet must reconstruct exactly duration.ticks. A mismatch
+              // (e.g. a synthesized merged note keeping the wrong base) makes renderers
+              // draw the wrong visual length and the cursor desyncs from the notes.
+              for (const n of line.notes) {
+                expect(
+                  computeTicks(n.duration.base, n.duration.dots, n.duration.tuplet),
+                  `seed=${thisSeed} note at tick ${n.startTick} base=${n.duration.base} dots=${n.duration.dots} ` +
+                    `tuplet=${JSON.stringify(n.duration.tuplet)} ticks=${n.duration.ticks}: notation != ticks`,
+                ).toBe(n.duration.ticks);
+              }
+
+              // --- barIndex is consistent with startTick ---
+              for (const n of line.notes) {
+                expect(
+                  n.barIndex,
+                  `seed=${thisSeed} note at tick ${n.startTick} has barIndex ${n.barIndex} != floor(startTick/tpb)`,
+                ).toBe(Math.floor(n.startTick / tpb));
+              }
+
+              // --- contiguity: notes tile [0, barCount*tpb) with no gaps/overlaps ---
+              const ordered = [...line.notes].sort(
+                (a, b) => a.startTick - b.startTick,
+              );
+              expect(ordered[0]!.startTick).toBe(0);
+              for (let k = 0; k + 1 < ordered.length; k++) {
+                expect(
+                  ordered[k + 1]!.startTick,
+                  `seed=${thisSeed} gap/overlap after tick ${ordered[k]!.startTick}`,
+                ).toBe(ordered[k]!.startTick + ordered[k]!.duration.ticks);
+              }
+              const lastNote = ordered[ordered.length - 1]!;
+              expect(lastNote.startTick + lastNote.duration.ticks).toBe(
+                barCount * tpb,
+              );
 
               // --- all notes playable in position ---
               for (const n of line.notes) {

@@ -29,9 +29,9 @@ const cMajor: Key = { tonic: { name: 'C', accidental: 'natural' }, mode: 'major'
 const C4: Pitch = { name: 'C', accidental: 'natural', octave: 4 };
 const stubChord = { root: C4, quality: 'major' as const };
 
-function qNote(startTick: number): LineNote {
+function qNote(startTick: number, pitch: Pitch | null = C4): LineNote {
   return {
-    pitch: C4,
+    pitch,
     duration: makeDuration('quarter'),
     startTick,
     barIndex: Math.floor(startTick / (TICKS_PER_QUARTER * 4)),
@@ -43,10 +43,8 @@ function qNote(startTick: number): LineNote {
   };
 }
 
-/** Tiny line: 1 bar of 4 quarters in 4/4 at 120 BPM. */
-function oneBarLine(): Line {
-  const notes: LineNote[] = [];
-  for (let i = 0; i < 4; i++) notes.push(qNote(i * TICKS_PER_QUARTER));
+/** Build a 1-bar 4/4 line at 120 BPM from the given four notes. */
+function lineFromNotes(notes: LineNote[]): Line {
   return {
     id: 't',
     seed: 1,
@@ -66,9 +64,17 @@ function oneBarLine(): Line {
   };
 }
 
+/** Tiny line: 1 bar of 4 quarters in 4/4 at 120 BPM. */
+function oneBarLine(): Line {
+  const notes: LineNote[] = [];
+  for (let i = 0; i < 4; i++) notes.push(qNote(i * TICKS_PER_QUARTER));
+  return lineFromNotes(notes);
+}
+
 /** A fake AudioContext: a settable clock and oscillator/gain spies. */
 function makeFakeClock() {
-  const scheduled: Array<{ when: number; freq: number }> = [];
+  const scheduled: Array<{ when: number; freq: number; type: string }> = [];
+  const stopped: Array<{ when?: number }> = [];
   let now = 0;
   const param = () => ({
     value: 0,
@@ -85,13 +91,24 @@ function makeFakeClock() {
     },
     createOscillator() {
       const freqParam = param();
-      const o = {
+      const o: {
+        type: string;
+        frequency: ReturnType<typeof param>;
+        onended: (() => void) | null;
+        connect: ReturnType<typeof vi.fn>;
+        start: ReturnType<typeof vi.fn>;
+        stop: ReturnType<typeof vi.fn>;
+      } = {
+        type: 'sine',
         frequency: freqParam,
+        onended: null,
         connect: vi.fn(),
         start: vi.fn((when: number) => {
-          scheduled.push({ when, freq: freqParam.value });
+          scheduled.push({ when, freq: freqParam.value, type: o.type });
         }),
-        stop: vi.fn(),
+        stop: vi.fn((when?: number) => {
+          stopped.push({ when });
+        }),
       };
       return o as unknown as OscillatorNode;
     },
@@ -101,7 +118,11 @@ function makeFakeClock() {
     },
     destination: {} as AudioDestinationNode,
   };
-  return { ctx: ctx as unknown as AudioClock & { setNow(t: number): void }, scheduled };
+  return {
+    ctx: ctx as unknown as AudioClock & { setNow(t: number): void },
+    scheduled,
+    stopped,
+  };
 }
 
 /** A controllable fake interval timer: collect callbacks, fire on demand. */
@@ -269,6 +290,112 @@ describe('Metronome scheduling', () => {
     expect(scheduled.length).toBe(16);
     expect(scheduled.filter((s) => s.freq === 1500).length).toBe(2);
     m.stop();
+  });
+
+  it('does NOT schedule melody tones by default (melody off keeps clicks only)', () => {
+    const { ctx, scheduled } = makeFakeClock();
+    const timer = makeFakeTimer();
+    ctx.setNow(0);
+    const m = new Metronome(ctx, oneBarLine(), {
+      countInBars: 1,
+      setIntervalFn: timer.setIntervalFn,
+      clearIntervalFn: timer.clearIntervalFn,
+    });
+    m.start();
+    for (let t = 0; t <= 4.2; t += 0.05) {
+      ctx.setNow(0.1 + t);
+      timer.fireAll();
+    }
+    // Only the 8 clicks; no triangle melody tones.
+    expect(scheduled.length).toBe(8);
+    expect(scheduled.every((s) => s.type !== 'triangle')).toBe(true);
+  });
+
+  it('with melody on, schedules a tone per non-rest note on the audio clock', () => {
+    const { ctx, scheduled } = makeFakeClock();
+    const timer = makeFakeTimer();
+    ctx.setNow(0);
+    const m = new Metronome(ctx, oneBarLine(), {
+      countInBars: 1,
+      melody: true,
+      setIntervalFn: timer.setIntervalFn,
+      clearIntervalFn: timer.clearIntervalFn,
+    });
+    m.start(); // t0 = 0.1
+    for (let t = 0; t <= 4.2; t += 0.05) {
+      ctx.setNow(0.1 + t);
+      timer.fireAll();
+    }
+    const tones = scheduled.filter((s) => s.type === 'triangle');
+    // 4 line notes => 4 melody tones (count-in produces no entries -> no tones).
+    expect(tones.length).toBe(4);
+    // Tones are pitched (C4 = 261.63 Hz), distinct from the click frequencies.
+    for (const tone of tones) {
+      expect(tone.freq).toBeCloseTo(261.63, 1);
+    }
+    // First tone lands on the line's first beat: count-in bar = 2000ms => t0 + 2.0s.
+    const firstTone = tones[0]!;
+    expect(firstTone.when).toBeCloseTo(2.1, 6);
+    // Tones land on the audio clock, one per beat (2000..3500ms after t0).
+    const whens = tones.map((s) => s.when).sort((a, b) => a - b);
+    expect(whens).toEqual([
+      expect.closeTo(2.1, 6),
+      expect.closeTo(2.6, 6),
+      expect.closeTo(3.1, 6),
+      expect.closeTo(3.6, 6),
+    ]);
+    m.stop();
+  });
+
+  it('with melody on, skips rests (no tone for a rest note)', () => {
+    const { ctx, scheduled } = makeFakeClock();
+    const timer = makeFakeTimer();
+    ctx.setNow(0);
+    // Beat 3 (index 2) is a rest (pitch === null).
+    const line = lineFromNotes([
+      qNote(0 * TICKS_PER_QUARTER),
+      qNote(1 * TICKS_PER_QUARTER),
+      qNote(2 * TICKS_PER_QUARTER, null),
+      qNote(3 * TICKS_PER_QUARTER),
+    ]);
+    const m = new Metronome(ctx, line, {
+      countInBars: 1,
+      melody: true,
+      setIntervalFn: timer.setIntervalFn,
+      clearIntervalFn: timer.clearIntervalFn,
+    });
+    m.start();
+    for (let t = 0; t <= 4.2; t += 0.05) {
+      ctx.setNow(0.1 + t);
+      timer.fireAll();
+    }
+    const tones = scheduled.filter((s) => s.type === 'triangle');
+    // 3 pitched notes => 3 tones; the rest is silent.
+    expect(tones.length).toBe(3);
+    m.stop();
+  });
+
+  it('stop() silences melody tones already scheduled', () => {
+    const { ctx, scheduled, stopped } = makeFakeClock();
+    const timer = makeFakeTimer();
+    ctx.setNow(0);
+    const m = new Metronome(ctx, oneBarLine(), {
+      countInBars: 1,
+      melody: true,
+      setIntervalFn: timer.setIntervalFn,
+      clearIntervalFn: timer.clearIntervalFn,
+    });
+    m.start();
+    // Advance just past the line's first beat so at least one tone is scheduled.
+    ctx.setNow(0.1 + 2.05);
+    timer.fireAll();
+    const tonesBefore = scheduled.filter((s) => s.type === 'triangle').length;
+    expect(tonesBefore).toBeGreaterThanOrEqual(1);
+    const stopsBefore = stopped.length;
+    m.stop();
+    // stop() explicitly stops each tracked, still-active tone oscillator (an extra
+    // stop() call beyond the scheduled-end stop()).
+    expect(stopped.length).toBeGreaterThan(stopsBefore);
   });
 
   it('stop() is idempotent and halts scheduling', () => {

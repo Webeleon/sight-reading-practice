@@ -199,15 +199,24 @@ export const OsmdView = forwardRef<CursorHandle, OsmdViewProps>(
           const osmd = osmdRef.current;
           if (!osmd) return;
           const count = entryCountRef.current;
-          const clamped =
-            count > 0 ? Math.min(Math.max(target, -1), count - 1) : -1;
+          if (count <= 0) return;
+          // OSMD's cursor always sits ON an entry; "before the first note" (-1) is not
+          // representable, so the read-along loop expresses count-in by hide()ing
+          // instead. Clamp move targets to a real entry.
+          const clamped = Math.min(Math.max(target, 0), count - 1);
           let cur = cursorIndexRef.current;
           if (clamped === cur) return;
           const cursor = osmd.cursor;
-          // Stepping backward is only needed on reset/replay; cheaper to reset+forward.
+          // CRUCIAL: cursor.reset() lands ON entry 0, NOT before it. So when we step
+          // backward (reset) or we're parked (cur < 0, where OSMD already sits on entry
+          // 0 from the last reset/load), our logical index is 0 with NO extra next().
+          // (The previous code treated post-reset as -1 and over-advanced by one, which
+          // made the cursor start on the second note instead of the downbeat.)
           if (clamped < cur) {
             cursor.reset();
-            cur = -1;
+            cur = 0;
+          } else if (cur < 0) {
+            cur = 0;
           }
           while (cur < clamped && !cursor.iterator.EndReached) {
             cursor.next();
@@ -252,9 +261,13 @@ export const OsmdView = forwardRef<CursorHandle, OsmdViewProps>(
           osmd.render();
           if (keepIndex >= 0) {
             // After render the cursor object persists; re-point it to keepIndex.
+            // CRUCIAL (same off-by-one as moveTo): cursor.reset() lands ON entry 0,
+            // NOT before it, so our logical index after reset is 0 with NO extra
+            // next(). The previous code anchored cur=-1 and ran the loop one extra
+            // time, leaving the cursor on keepIndex+1 (the bug Item-1 fixes).
             const cursor = osmd.cursor;
             cursor.reset();
-            let cur = -1;
+            let cur = 0;
             while (cur < keepIndex && !cursor.iterator.EndReached) {
               cursor.next();
               cur++;

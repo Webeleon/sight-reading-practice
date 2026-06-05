@@ -53,6 +53,9 @@ export function App(): React.JSX.Element {
   // Synthetic-take harness (hardware-free testing of the evaluation/feedback path).
   const [syntheticMode, setSyntheticMode] = useState(false);
   const [syntheticAccuracy, setSyntheticAccuracy] = useState(0.8);
+  // "Hear line": optionally play a soft tone per note alongside the clicks (ON by
+  // default — the human asked to hear the line while reading).
+  const [melody, setMelody] = useState(true);
 
   const cursorHandleRef = useRef<CursorHandle | null>(null);
   const [cursorReady, setCursorReady] = useState(false);
@@ -63,6 +66,8 @@ export function App(): React.JSX.Element {
     result,
     attemptType,
     detectedCount,
+    countInBeat,
+    countInTotalBeats,
     start,
     stop,
   } = useSightReading({
@@ -70,6 +75,7 @@ export function App(): React.JSX.Element {
     cursor: cursorReady ? cursorHandleRef.current : null,
     countInBars: COUNT_IN_BARS,
     inputDeviceId,
+    melody,
   });
 
   // Generate the first line on mount.
@@ -208,6 +214,18 @@ export function App(): React.JSX.Element {
         <button className="btn" onClick={stop} disabled={!isRunning}>
           Stop
         </button>
+        <label
+          className="hear-line"
+          title="Play a soft tone per note alongside the clicks (synced to the same clock)"
+        >
+          <input
+            type="checkbox"
+            checked={melody}
+            disabled={isRunning}
+            onChange={(e) => setMelody(e.target.checked)}
+          />
+          Hear line
+        </label>
         <span className="detected-count">detected: {detectedCount}</span>
       </section>
 
@@ -276,6 +294,24 @@ export function App(): React.JSX.Element {
           }}
           onRendered={(l) => console.log(`[UI] line rendered: ${l.id}`)}
         />
+        {phase === 'countIn' && countInTotalBeats > 0 && (
+          <div className="countin-overlay" role="status" aria-live="polite">
+            <div className="countin-label">Count-in</div>
+            <div className="countin-number" key={countInBeat}>
+              {countInBeat}
+            </div>
+            <div className="countin-dots">
+              {Array.from({ length: countInTotalBeats }, (_, i) => (
+                <span
+                  key={i}
+                  className={
+                    'countin-dot' + (i + 1 === countInBeat ? ' is-current' : '')
+                  }
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="phase-line">

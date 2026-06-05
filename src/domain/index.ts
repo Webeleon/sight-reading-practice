@@ -18,6 +18,7 @@ export {
   computeTicks,
   makeDuration,
   durationToTicks,
+  ticksToDuration,
 } from './duration.js';
 
 // --- timeSignature ---
