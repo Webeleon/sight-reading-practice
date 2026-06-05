@@ -1,7 +1,7 @@
 // StatsView.tsx — the Milestone-5 statistics screen (two views, brief M5).
 //
 // Disposable UI layer. Reads ALL data via the stats IPC (statsBridge.ts) — the
-// renderer never touches better-sqlite3. Two sub-views:
+// renderer never touches the SQLite driver. Two sub-views:
 //   (a) AccuracyOverTime — pitch & timing accuracy over time, filterable by KEY
 //       (key_tonic + key_mode) and POSITION (fret window). A plain SVG line chart.
 //   (b) MissedNoteHeatmap — per-pitch missed/wrong rate as a staff/pitch heatmap
@@ -238,7 +238,7 @@ export function StatsView(): React.JSX.Element {
         <p className="stats-warning">
           Stats are read from the SQLite DB in the Electron main process. Running
           outside Electron (browser preview), so there is no data to show. Launch
-          the app with <code>npm run dev</code> (it electron-rebuilds first).
+          the app with <code>npm run dev</code>.
         </p>
       )}
 

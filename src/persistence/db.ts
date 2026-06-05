@@ -1,28 +1,149 @@
 // db.ts — SQLite open + numbered-migration runner (Milestone 5).
 //
-// NODE / ELECTRON-MAIN layer (tsconfig.node). better-sqlite3 is a NATIVE module:
-// after `npm install` it is built for the NODE ABI, which is why the persistence
-// layer is unit-testable under vitest (which runs on node) with no rebuild. At
-// RUNTIME the DB lives in the Electron MAIN process; the renderer reaches it via
-// IPC. Before running the Electron app you must `npm run rebuild:electron` (the
-// predev/prepreview scripts do this) to get the Electron ABI; before running
-// `npm run verify` again afterwards, `npm run rebuild:node`. See LEARNINGS.md.
+// NODE / ELECTRON-MAIN layer (tsconfig.node). The driver is Node's BUILT-IN
+// `node:sqlite` (DatabaseSync) — NOT a native npm module. This matters: there is
+// NO native-module ABI problem to manage. The same code loads under vitest (node)
+// and inside the Electron MAIN process with no rebuild step, because node:sqlite
+// ships with the runtime. (The prototype previously used a native npm SQLite
+// module, which could not compile against Electron 42's V8 — see LEARNINGS.md for
+// the full migration rationale.) node:sqlite emits a harmless
+// `ExperimentalWarning: SQLite is an experimental feature` on stderr; that is
+// expected and does not need a flag.
+//
+// At RUNTIME the DB lives in the Electron MAIN process; the renderer reaches it via
+// IPC. No DAO ever opens its own connection.
 //
 // DESIGN: dependency-injectable. openDatabase(path) / openInMemory() return a live
-// better-sqlite3 Database with all migrations applied; every DAO takes that
-// Database as its first argument, so tests open an in-memory DB and pass it in.
-// No DAO ever opens its own connection.
+// Db with all migrations applied; every DAO takes that Db as its first argument, so
+// tests open an in-memory DB and pass it in.
 //
-// No `any` (brief section 16): we import better-sqlite3's own types.
+// The Db type below is a THIN wrapper around DatabaseSync that re-exposes the small
+// API surface the DAOs + tests use (prepare/exec/close plus pragma() and
+// transaction() helpers, which node:sqlite does not provide natively). The public
+// interface (openDatabase / openInMemory / runMigrations / the Db shape) is
+// unchanged from the prior driver, so every DAO, stats query, test, and the
+// Electron main process compile and behave exactly as before — only the driver
+// underneath changed.
+//
+// No `any` (brief section 16): node:sqlite is fully typed via @types/node.
 
-import Database from 'better-sqlite3';
+import { DatabaseSync } from 'node:sqlite';
+import type { StatementResultingChanges } from 'node:sqlite';
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 
-/** The better-sqlite3 Database instance type, re-exported so DAOs and callers can
- *  annotate parameters without importing better-sqlite3 directly. */
-export type Db = Database.Database;
+/** A named-parameters object: keys match the `@name` / `:name` / `$name`
+ *  placeholders (prefix optional), values are bound by node:sqlite (which accepts
+ *  null/number/bigint/string/ArrayBufferView). Typed as `object` (not a
+ *  Record/index-signature type) so a DAO may pass a structurally matching TYPED
+ *  object — e.g. NoteEventRow — without an index signature, exactly as it could
+ *  against the prior driver's permissive binding types. `object` still rejects bare
+ *  primitives, catching accidental positional misuse; node:sqlite enforces value
+ *  types (and throws on a JS boolean) at bind time. */
+type NamedParams = object;
+
+/** A prepared statement, narrowed to the methods the DAOs use. `run`/`get`/`all`
+ *  take an OPTIONAL named-parameters object (keys match the `@name` placeholders;
+ *  omit it for a no-param statement) — the only call forms the DAOs + tests use.
+ *  `get`/`all` return `unknown` so call sites narrow with a cast (as the prior
+ *  driver did). */
+export interface Statement {
+  run(params?: NamedParams): StatementResultingChanges;
+  get(params?: NamedParams): unknown;
+  all(params?: NamedParams): unknown[];
+}
+
+/** Options for {@link Db.pragma}. `simple: true` returns the single pragma value
+ *  rather than the `{ name: value }` row (matching the prior driver's `simple`). */
+interface PragmaOptions {
+  simple?: boolean;
+}
+
+/**
+ * The database handle every DAO + the Electron main process is typed against. A
+ * thin facade over node:sqlite's DatabaseSync that adds the two conveniences
+ * node:sqlite lacks but the codebase relies on:
+ *   - pragma(name[, {simple}])  — node:sqlite has no pragma() helper, so we run
+ *     `PRAGMA <name>` / `PRAGMA <expr>` via prepare/exec ourselves.
+ *   - transaction(fn)           — node:sqlite has no transaction() helper, so we
+ *     wrap fn in BEGIN/COMMIT (ROLLBACK on throw) and return a callable, matching
+ *     the prior driver's db.transaction(fn)() usage.
+ * prepare/exec/close delegate straight to DatabaseSync.
+ */
+export class Db {
+  private readonly inner: DatabaseSync;
+
+  constructor(path: string) {
+    this.inner = new DatabaseSync(path);
+  }
+
+  /** Prepare a statement. The returned object's run/get/all delegate to
+   *  node:sqlite's StatementSync, whose overloads already accept a named-params
+   *  object or positional values. */
+  prepare(sql: string): Statement {
+    return this.inner.prepare(sql) as unknown as Statement;
+  }
+
+  /** Run one or more raw SQL statements (DDL, BEGIN/COMMIT, the migration SQL). */
+  exec(sql: string): void {
+    this.inner.exec(sql);
+  }
+
+  /**
+   * Read or set a PRAGMA, emulating the prior driver's pragma() helper:
+   *   pragma('user_version', { simple: true }) -> the number
+   *   pragma('user_version = 5')               -> sets it (runs as a statement)
+   *   pragma('foreign_keys = ON')              -> sets it
+   * A bare name (no `=`) is a READ: returns the `{ name: value }` row, or just the
+   * value when `simple` is set. An assignment (`name = value`) is executed.
+   */
+  pragma(
+    source: string,
+    options: PragmaOptions = {},
+  ): unknown {
+    if (source.includes('=')) {
+      // Assignment form: PRAGMA name = value. user_version etc. take a literal,
+      // not a bound parameter, so this is always a trusted internal string.
+      this.inner.exec(`PRAGMA ${source}`);
+      return undefined;
+    }
+    const row = this.inner.prepare(`PRAGMA ${source}`).get() as
+      | Record<string, unknown>
+      | undefined;
+    if (options.simple) {
+      // The pragma name is the (single) column key; return its value.
+      if (!row) return undefined;
+      const values = Object.values(row);
+      return values.length > 0 ? values[0] : undefined;
+    }
+    return row;
+  }
+
+  /**
+   * Wrap `fn` in a manual transaction and return a callable that runs it inside
+   * BEGIN/COMMIT, rolling back on any throw. Mirrors the prior driver's
+   * `db.transaction(fn)` (which returns a function you then call). node:sqlite has
+   * no transaction() helper, so we drive BEGIN/COMMIT/ROLLBACK by hand.
+   */
+  transaction(fn: () => void): () => void {
+    return (): void => {
+      this.inner.exec('BEGIN');
+      try {
+        fn();
+        this.inner.exec('COMMIT');
+      } catch (err) {
+        this.inner.exec('ROLLBACK');
+        throw err;
+      }
+    };
+  }
+
+  /** Close the underlying connection. */
+  close(): void {
+    this.inner.close();
+  }
+}
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 
@@ -42,7 +163,7 @@ export const DEFAULT_MIGRATIONS_DIR = join(moduleDir, 'migrations');
  *
  * `migrationsDir` defaults to the co-located `migrations/` folder; callers that
  * run from a bundle (Electron main) pass an explicit path. Exported so a caller
- * can run migrations against an externally-created Database (the DI seam), but
+ * can run migrations against an externally-created Db (the DI seam), but
  * openDatabase/openInMemory call it for you.
  */
 export function runMigrations(
@@ -88,13 +209,13 @@ function configureConnection(db: Db): void {
 
 /**
  * Open (or create) the on-disk database at `path`, configure the connection, run
- * all pending migrations, and return the live Database. This is what the Electron
- * main process calls (lazily + guarded — see main.ts) with the userData db path.
+ * all pending migrations, and return the live Db. This is what the Electron main
+ * process calls (lazily + guarded — see main.ts) with the userData db path.
  * `migrationsDir` lets the Electron main process point at the migrations folder it
  * ships, since import.meta.url resolves to the bundle there, not the source tree.
  */
 export function openDatabase(path: string, migrationsDir?: string): Db {
-  const db = new Database(path);
+  const db = new Db(path);
   configureConnection(db);
   runMigrations(db, migrationsDir);
   console.log(`[DB] opened database at ${path}`);
@@ -107,7 +228,7 @@ export function openDatabase(path: string, migrationsDir?: string): Db {
  * the suite never touches disk and starts from a clean schema each time.
  */
 export function openInMemory(): Db {
-  const db = new Database(':memory:');
+  const db = new Db(':memory:');
   configureConnection(db);
   runMigrations(db);
   return db;

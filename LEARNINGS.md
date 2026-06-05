@@ -1759,3 +1759,66 @@ or `node_modules/bindings` paths), and the built `main.mjs`/`preload.mjs` expose
 channels (`session:start|end`, `attempt:write`, `preset:save|load|list|use|delete`). Done WITHOUT
 electron-rebuild, so better-sqlite3 stayed on the node ABI and verify is green; after running the app
 you must `npm run rebuild:node` before `npm run verify` again.
+
+## Persistence driver swap — `node:sqlite` (built-in) replaces better-sqlite3 (2026-06)
+
+**What changed and why.** Replaced the native npm module `better-sqlite3` (12.10.0) with Node's
+BUILT-IN `node:sqlite` (`DatabaseSync`). Reason: better-sqlite3 12.10.0 will not compile against
+**Electron 42's V8** (node-gyp build fails). `node:sqlite` ships inside the Node/Electron runtime, so
+there is **no native module and no ABI to manage** — this eliminates the entire dual-ABI dance the
+two M5 sections above describe (`electron-rebuild` for the Electron ABI, `npm rebuild` back to the
+node ABI for vitest, the `predev`/`prepreview` hooks, the externalize-the-`.node`-binary build
+problem). The same persistence code now loads identically under vitest (node) and inside the Electron
+main process with zero rebuild steps. **NOTE for the Swift rewrite: this is a DRIVER choice only. The
+SQLite SCHEMA (`src/persistence/migrations/001_initial.sql`) is byte-for-byte UNCHANGED** — it remains
+the authoritative transferable artifact; the driver underneath is independent of it.
+
+**Kept the public interface stable; only `db.ts` changed materially.** `Db` is now a thin wrapper
+CLASS around `DatabaseSync`, re-exposing exactly the surface the DAOs + tests already used
+(`prepare`/`exec`/`close`) plus the two helpers node:sqlite lacks (see API differences). Because the
+wrapper preserves the better-sqlite3-shaped API, **every DAO (sessions/lineAttempts/noteEvents/
+presets), stats.ts, and all three test files (`persistence.test.ts`, `stats.test.ts`,
+`tests/e2e.persistence.test.ts`) needed NO logic changes** — they pass unchanged. Only comments were
+updated to stop naming the old driver.
+
+**API differences that mattered (carry these to any future node:sqlite use):**
+- **No `db.pragma()` helper.** Wrapper emulates it: a bare name (`pragma('user_version', {simple:true})`)
+  runs `db.prepare('PRAGMA user_version').get()` and returns the single value (or the `{name:value}`
+  row without `simple`); an assignment (`pragma('user_version = 1')`, `pragma('foreign_keys = ON')`)
+  runs `db.exec('PRAGMA ...')`. `PRAGMA user_version = N` takes a LITERAL, never a bound parameter.
+- **No `db.transaction()` helper.** Wrapper returns a callable that does `exec('BEGIN')` → fn →
+  `exec('COMMIT')`, with `exec('ROLLBACK')` + rethrow on any throw. Same `db.transaction(fn)()` call
+  shape the migration runner, `insertNoteEvents`, and the `attempt:write` IPC handler already used.
+- **Named parameters: prefix is OPTIONAL.** node:sqlite binds `@name`/`:name`/`$name` placeholders
+  from an object whose keys may be bare (`{id: 'x'}` for `@id`) — exactly like better-sqlite3 — so the
+  DAOs' `.run({...})` / `.get({...})` / `.all({...})` calls worked verbatim. (Prefixed keys also work.)
+- **Booleans THROW at bind time** ("Provided value cannot be bound to SQLite parameter"). The DAOs
+  already store booleans as 0/1 integers (e.g. `is_strong_beat: note.isStrongBeat ? 1 : 0`), so this
+  was a non-issue — but it is a hard rule: never bind a JS `boolean` to node:sqlite. `null` binds fine.
+- **`run()` returns `{changes, lastInsertRowid}`** (both `number | bigint`); `INTEGER` columns come
+  back as JS `number` by default. `presets.usePreset`/`deletePreset` use `.changes` as before.
+- **TypeScript binding-param typing gotcha.** node:sqlite's own `Record<string, SQLInputValue>` param
+  type (and any index-signature/`Record` type) will NOT accept a structurally-matching TYPED object
+  like `NoteEventRow` ("Index signature ... is missing") — and a generic `<T extends Record<...>>` on
+  an INTERFACE method does not infer through to fix it either. better-sqlite3's looser types had
+  hidden this. The fix that keeps the DAOs untouched: type the wrapper's named-param argument as
+  `object`. `object` accepts any typed bag, still rejects bare primitives (catching positional misuse),
+  and node:sqlite validates the actual value types at bind time.
+
+**Harmless ExperimentalWarning.** node:sqlite prints `ExperimentalWarning: SQLite is an experimental
+feature and might change at any time` to stderr on first use (under both vitest and Electron). This is
+EXPECTED, needs no flag, and does not affect tests or the build. (Node 24.13 here; node:sqlite is
+stable enough for a prototype.)
+
+**Removed/cleaned up.** Dependencies: dropped `better-sqlite3`, `@electron/rebuild`, and
+`@types/better-sqlite3`. Scripts: dropped `rebuild:electron`, `rebuild:node`, `predev`, `prepreview`
+(no native module → nothing to rebuild before launching). `electron.vite.config.ts`: removed
+`'better-sqlite3'` and `'bindings'` from `rollupOptions.external` (node:sqlite is a `node:` builtin,
+externalized automatically); kept `'electron'`. `electron/main.ts`: the guarded `getDb()` try/catch
+stays (still logs a clear `[DB]` warning and disables persistence on failure so the app launches), but
+the better-sqlite3/ABI/`rebuild:electron` messaging is gone. **The earlier two M5 sections above
+remain as a historical record of the native-module era; they no longer describe the current setup.**
+
+**Verified.** `npx vitest run src/persistence` + `tests/e2e.persistence.test.ts` green; `npm run verify`
+green; `npm run build` (electron-vite) green; `grep` confirms zero `better-sqlite3` references remain in
+`src/`, `electron/`, `package.json`, or `electron.vite.config.ts`.

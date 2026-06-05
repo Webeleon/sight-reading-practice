@@ -1,7 +1,7 @@
 // statsBridge.ts — renderer-side typed accessor for the stats IPC (Milestone 5).
 //
-// Disposable UI layer. The renderer NEVER imports the persistence layer or
-// better-sqlite3 (native, main-process only). Instead it calls the preload
+// Disposable UI layer. The renderer NEVER imports the persistence layer or the
+// SQLite driver (main-process only). Instead it calls the preload
 // bridge (window.sightReading.stats), which round-trips to the main-process DB
 // and returns plain JSON. These functions:
 //   * expose typed wrappers over the IPC channels,

@@ -1,8 +1,8 @@
 // Barrel for the persistence layer (Milestone 5). NODE / Electron-main only:
-// better-sqlite3 is a NATIVE module and must NOT be imported by any pure module or
-// the renderer (the renderer reaches the DB via IPC). Types and values are
-// re-exported separately because verbatimModuleSyntax requires `export type` for
-// type-only symbols.
+// the driver is Node's built-in `node:sqlite`, which must NOT be imported by any
+// pure module or the renderer (the renderer reaches the DB via IPC). Types and
+// values are re-exported separately because verbatimModuleSyntax requires
+// `export type` for type-only symbols.
 
 // --- db (open + migrations runner; the DI seam) ---
 export type { Db } from './db.js';

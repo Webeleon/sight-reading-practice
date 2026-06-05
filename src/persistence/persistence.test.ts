@@ -1,7 +1,7 @@
 // persistence.test.ts — node TDD for the Milestone 5 persistence layer.
 //
-// Runs under vitest's NODE project (better-sqlite3 is built for the node ABI after
-// npm install, so it loads here without electron-rebuild). Every test opens a fresh
+// Runs under vitest's NODE project. The driver is Node's built-in node:sqlite, so
+// it loads here with no native build / rebuild step. Every test opens a fresh
 // in-memory DB via openInMemory() (the DI seam) and passes it to the DAOs.
 //
 // Coverage (brief M5 acceptance + the task brief):
@@ -308,7 +308,7 @@ describe('writing one completed line', () => {
     db.close();
   });
 
-  it('enforces the session FK (better-sqlite3 with foreign_keys ON)', () => {
+  it('enforces the session FK (node:sqlite with foreign_keys ON)', () => {
     const db = openInMemory();
     const line = generateLine(CONFIG, 1, GENERATED_AT);
     expect(() =>

@@ -1,8 +1,8 @@
 // sessionBridge.ts — renderer-side typed accessor for the session-loop WRITE IPC
 // (Milestone 5). Mirrors statsBridge.ts.
 //
-// Disposable UI layer. The renderer NEVER imports the persistence layer or
-// better-sqlite3 (native, main-process only). It calls the preload bridge
+// Disposable UI layer. The renderer NEVER imports the persistence layer or the
+// SQLite driver (main-process only). It calls the preload bridge
 // (window.sightReading.session / .presets), which round-trips to the
 // main-process DB. Every function DEGRADES GRACEFULLY outside Electron (the
 // `npm run dev` browser preview, where there is no main process / DB): it returns

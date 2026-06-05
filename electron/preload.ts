@@ -92,10 +92,10 @@ const api = {
       ipcRenderer.invoke('config:set', patch),
   },
   /**
-   * Read-only stats queries (Milestone 5 views). The renderer NEVER touches
-   * better-sqlite3; it calls these, which round-trip to the main-process DB and
+   * Read-only stats queries (Milestone 5 views). The renderer NEVER touches the
+   * SQLite driver; it calls these, which round-trip to the main-process DB and
    * return plain JSON. Each resolves to an empty array when persistence is
-   * disabled (e.g. ABI mismatch), so the stats view degrades gracefully.
+   * disabled, so the stats view degrades gracefully.
    */
   stats: {
     /** Pitch & timing accuracy over time for first_read attempts (filterable). */
@@ -117,7 +117,7 @@ const api = {
    * end the session on quit. Every call returns { persisted } so the renderer can
    * tell whether saving is live (false when persistence is disabled / browser
    * preview). The DB itself lives in the main process — the renderer never touches
-   * better-sqlite3.
+   * the SQLite driver.
    */
   session: {
     /** Begin a session: one sessions row (ended_at NULL). main stamps the clock. */

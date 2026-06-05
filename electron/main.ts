@@ -83,15 +83,14 @@ function registerConfigIpc(): void {
 // ----------------------------------------------------------------------------
 // SQLite persistence (Milestone 5) — initialized LAZILY and GRACEFULLY.
 //
-// better-sqlite3 is a NATIVE module. The package is built for the NODE ABI after
-// `npm install` (so the persistence layer is unit-testable under vitest), but the
-// Electron runtime needs the ELECTRON ABI. The predev/prepreview npm scripts run
-// `electron-rebuild` to fix this automatically; but if the binary is still on the
-// wrong ABI, REQUIRING better-sqlite3 throws. We must NOT crash the app for that:
-// the read-along + evaluation UX runs fine without persistence. So we:
+// The driver is Node's BUILT-IN `node:sqlite` (see src/persistence/db.ts), so there
+// is NO native-module ABI mismatch to manage: the same code loads under vitest and
+// inside the Electron main process with no rebuild step. We still open the DB inside
+// a try/catch and DEGRADE GRACEFULLY: if opening or migrating the DB fails for any
+// reason (e.g. a corrupt/locked file), we log a clear [DB] warning and disable
+// persistence (db stays null) so the read-along + evaluation UX still launches.
 //   * load the persistence module DYNAMICALLY inside a try/catch (first DB use),
-//   * on failure, log a clear [DB] warning telling the user to run
-//     `npm run rebuild:electron`, and DISABLE persistence (db stays null),
+//   * on failure, log a [DB] warning and DISABLE persistence (db stays null),
 //   * keep the app fully launchable + usable read-along either way.
 // ----------------------------------------------------------------------------
 
@@ -117,9 +116,9 @@ function resolveMigrationsDir(): string | undefined {
 }
 
 /**
- * Lazily open the SQLite DB (idempotent). Returns the Database, or null if
- * better-sqlite3 could not load (wrong ABI) or opening failed — in which case
- * persistence is silently disabled and the app keeps running.
+ * Lazily open the SQLite DB (idempotent). Returns the Db, or null if opening or
+ * migrating failed — in which case persistence is silently disabled and the app
+ * keeps running.
  */
 async function getDb(): Promise<Db | null> {
   if (db) return db;
@@ -127,7 +126,7 @@ async function getDb(): Promise<Db | null> {
   dbInitAttempted = true;
 
   try {
-    // Dynamic import so a native-module load failure is catchable here rather than
+    // Dynamic import so any load/open failure is catchable here rather than
     // crashing the whole main process at startup.
     const persistence = await import('../src/persistence/index.js');
     const dbPath = join(app.getPath('userData'), 'sight-reading.db');
@@ -144,11 +143,8 @@ async function getDb(): Promise<Db | null> {
     return db;
   } catch (err) {
     console.warn(
-      '[DB] failed to initialize SQLite (persistence DISABLED). This is almost ' +
-        'always a native-module ABI mismatch: better-sqlite3 is built for the ' +
-        'NODE ABI (for vitest) but Electron needs its own ABI. Run ' +
-        '`npm run rebuild:electron` and relaunch. The app will run read-along ' +
-        'without saving. Underlying error:',
+      '[DB] failed to initialize SQLite (persistence DISABLED). The app will run ' +
+        'read-along without saving. Underlying error:',
       err,
     );
     db = null;
@@ -211,7 +207,7 @@ function registerDbIpc(): void {
 // ----------------------------------------------------------------------------
 // Stats IPC (Milestone 5 stats views).
 //
-// The renderer NEVER touches better-sqlite3. It asks the main process to run the
+// The renderer NEVER touches the SQLite driver. It asks the main process to run the
 // read-only stats queries (src/persistence/stats.ts) and gets back plain JSON.
 // Each handler lazily resolves the DB (getDb) and returns an empty result when
 // persistence is disabled, so the stats view degrades gracefully instead of
@@ -220,7 +216,7 @@ function registerDbIpc(): void {
 // ----------------------------------------------------------------------------
 
 /** The persistence surface (stats + DAOs), loaded dynamically alongside the DB so
- *  a native module ABI failure stays catchable in getDb(). */
+ *  any load/open failure stays catchable in getDb(). */
 type PersistenceModule = typeof import('../src/persistence/index.js');
 
 /** Cached once loaded, so before-quit (which is SYNC) can end the active session
@@ -283,12 +279,12 @@ function registerStatsIpc(): void {
 // ----------------------------------------------------------------------------
 // Session-loop WRITE IPC (Milestone 5) — the treadmill's persistence side.
 //
-// The renderer NEVER imports better-sqlite3 or the persistence DAOs (native,
+// The renderer NEVER imports the SQLite driver or the persistence DAOs (they are
 // main-process only). It calls these channels, which lazily resolve the DB and
 // invoke the DAOs (src/persistence/sessions|lineAttempts|noteEvents). All write
-// handlers DEGRADE GRACEFULLY: when persistence is disabled (e.g. ABI mismatch)
-// they return { persisted: false } instead of throwing, so the read-along loop
-// keeps running. The renderer treats a false result as "saving is off".
+// handlers DEGRADE GRACEFULLY: when persistence is disabled they return
+// { persisted: false } instead of throwing, so the read-along loop keeps running.
+// The renderer treats a false result as "saving is off".
 //
 // The Line + EvaluationResult travel verbatim as plain JSON over IPC (both are
 // JSON.stringify-round-trip-safe by design — see domain/line.ts). The main

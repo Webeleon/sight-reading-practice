@@ -4,7 +4,7 @@
 // back the two stats VIEWS (brief Milestone 5 acceptance: "at least two stats
 // views ... verify each view's query returns correct numbers against a seeded
 // test dataset"). DI: every function takes the Database, so tests pass an
-// in-memory DB and the renderer reaches these via IPC (never better-sqlite3
+// in-memory DB and the renderer reaches these via IPC (never the SQLite driver
 // directly).
 //
 // THE FLUENCY RULE (brief section 11): only attempt_type = 'first_read' attempts

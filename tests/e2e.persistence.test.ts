@@ -1,8 +1,8 @@
 // e2e.persistence.test.ts — the SCRIPTED end-to-end test (brief section 15).
 //
-// Runs under vitest's NODE project (better-sqlite3 is built for the node ABI after
-// `npm install`, so it loads here without electron-rebuild — keep node ABI so
-// `npm run verify` stays green; do NOT electron-rebuild for this). It exercises the
+// Runs under vitest's NODE project. The driver is Node's built-in node:sqlite, so
+// it loads here with no native build / rebuild step and `npm run verify` stays
+// green with the same code the Electron main process runs. It exercises the
 // WHOLE Milestone-5 vertical slice the brief's section-15 acceptance names:
 //
 //   "A scripted end-to-end test that: starts a session, generates a line, feeds a

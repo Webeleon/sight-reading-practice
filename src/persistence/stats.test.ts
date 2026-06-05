@@ -1,7 +1,7 @@
 // stats.test.ts — node TDD for the Milestone-5 stats QUERIES (stats.ts).
 //
-// Runs under vitest's NODE project (better-sqlite3 is on the node ABI after npm
-// install). Each test opens a fresh in-memory DB via openInMemory() (the DI seam)
+// Runs under vitest's NODE project (the driver is Node's built-in node:sqlite, so
+// no native build step). Each test opens a fresh in-memory DB via openInMemory() (the DI seam)
 // and seeds it with hand-built rows whose key/position/classification outcomes are
 // KNOWN, then asserts the queries return the exact numbers — including the
 // CRITICAL invariant that retry_at_tempo / retry_slower attempts are EXCLUDED from

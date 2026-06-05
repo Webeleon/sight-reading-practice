@@ -76,7 +76,7 @@ export function App(): React.JSX.Element {
   // --- Session-loop persistence (Milestone 5) ------------------------------
   // One sessions row per app run: started on mount, ended on unmount / quit. Each
   // COMPLETED attempt writes one line_attempts row + its note_events via IPC. The
-  // renderer never touches better-sqlite3 — sessionBridge.ts round-trips to the
+  // renderer never touches the SQLite driver — sessionBridge.ts round-trips to the
   // main-process DB and is a graceful no-op outside Electron (browser preview).
   const sessionIdRef = useRef<string | null>(null);
   // Monotonic line_index_in_session, bumped per persisted attempt.
@@ -414,7 +414,7 @@ export function App(): React.JSX.Element {
           title={
             persistenceOn
               ? 'Completed attempts are saved to the SQLite DB (Electron main process).'
-              : 'Persistence is off (browser preview, or better-sqlite3 ABI mismatch — run npm run rebuild:electron).'
+              : 'Persistence is off (browser preview, or the SQLite DB could not be opened).'
           }
         >
           saving: <strong>{persistenceOn ? 'on' : 'off'}</strong>
