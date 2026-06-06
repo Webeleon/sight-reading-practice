@@ -1,0 +1,31 @@
+.faq {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  margin-top: 36px;
+  border-top: 1.5px solid var(--ink);
+}
+@media (max-width: 720px) {
+  .faq {
+    grid-template-columns: 1fr;
+  }
+}
+.qa {
+  padding: 22px 20px;
+  border-bottom: 1px solid var(--line);
+  border-right: 1px solid var(--line);
+}
+.qa:nth-child(2n) {
+  border-right: 0;
+}
+.qa h4 {
+  font-size: 16px;
+  margin: 0 0 8px;
+}
+.qa p {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-2);
+  margin: 0;
+}

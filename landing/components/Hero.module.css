@@ -1,0 +1,36 @@
+.hero {
+  padding: 64px 0 30px;
+}
+.kick {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.hero h1 {
+  font-size: clamp(40px, 8vw, 86px);
+  margin: 18px 0 0;
+  max-width: 15ch;
+}
+.grid {
+  display: grid;
+  grid-template-columns: 1.35fr 1fr;
+  gap: 34px;
+  align-items: end;
+  margin-top: 34px;
+}
+@media (max-width: 820px) {
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 26px;
+  }
+}
+.lede {
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.8;
+  color: var(--ink-2);
+  max-width: 46ch;
+}
+.lede b {
+  color: var(--ink);
+}

@@ -1,0 +1,29 @@
+.pains {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  margin-top: 36px;
+  border-top: 1.5px solid var(--ink);
+}
+@media (max-width: 760px) {
+  .pains {
+    grid-template-columns: 1fr;
+  }
+}
+.pain {
+  padding: 22px 20px;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+.pain:last-child {
+  border-right: 0;
+}
+.pain .q {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--flux);
+}
+.pain p {
+  margin: 8px 0 0;
+  font-size: 15px;
+}

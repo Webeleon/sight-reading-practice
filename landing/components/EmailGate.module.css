@@ -1,0 +1,193 @@
+/* Email gate — ported from design/landing.html (.gate / .gate-form / .gate-done)
+   plus the dark variant from the `.download .gate-*` overrides. The two visual
+   skins are selected with the `.light` / `.dark` modifier on the root. */
+
+.gate {
+}
+
+.gateLbl {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 8px;
+}
+
+.form {
+  display: flex;
+  gap: 0;
+  border: 1.5px solid var(--ink);
+  background: var(--paper-2);
+  box-shadow: 5px 5px 0 var(--blue);
+}
+.form input {
+  flex: 1;
+  border: 0;
+  background: transparent;
+  padding: 15px 14px;
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--ink);
+  min-width: 0;
+}
+/* The bordered .form is the visual control, so carry the focus ring there when
+   the input inside it receives keyboard focus. The background tint is a
+   secondary cue only — the ring is the WCAG 2.4.7 indicator. */
+.form:focus-within {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.form input:focus {
+  background: #fff;
+}
+/* Drop the input's own UA outline only when the ring above is showing. */
+.form input:focus-visible {
+  outline: 0;
+}
+.form button {
+  border: 0;
+  border-left: 1.5px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--disp);
+  font-weight: 900;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0 18px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.form button:hover {
+  background: var(--blue);
+}
+.form button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.dark .form button:focus-visible {
+  outline-color: #9fb0ff;
+}
+.form button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+/* invalid-input flash (replaces the mockup's inline style mutation) */
+.inputError {
+  background: #fff0ec !important;
+}
+
+.fine {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-3);
+  margin-top: 10px;
+}
+.fine a {
+  color: var(--blue);
+}
+
+/* client-side validation message */
+.error {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--flux);
+  margin-top: 10px;
+}
+
+/* success state */
+.done {
+  border: 1.5px solid var(--ink);
+  background: var(--paper-2);
+  box-shadow: 5px 5px 0 var(--flux);
+  padding: 16px 18px;
+}
+.ok {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ok);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.msg {
+  margin: 8px 0 14px;
+  font-size: 14px;
+}
+.msg b {
+  background: var(--flux);
+  color: #fff;
+  padding: 0 4px;
+}
+.dl {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.dl a.releases {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--blue);
+  text-decoration: none;
+}
+.dl a.releases:hover {
+  text-decoration: underline;
+}
+
+.platforms {
+  display: flex;
+  gap: 18px;
+  margin-top: 16px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: #b6b1a5;
+}
+
+/* ---- DARK VARIANT (the download band) -------------------------------------
+   Mirrors the `.download .gate-*` overrides in the mockup. */
+.dark .gateLbl,
+.dark .fine {
+  color: #b6b1a5;
+}
+.dark .form {
+  background: #1d1b18;
+  border-color: var(--paper);
+  box-shadow: 5px 5px 0 var(--flux);
+}
+.dark .form input {
+  color: var(--paper);
+}
+.dark .form input::placeholder {
+  color: #8a857a;
+}
+.dark .form input:focus {
+  background: #26231f;
+}
+/* Brighter ring on the dark band so it reads against #1d1b18. */
+.dark .form:focus-within {
+  outline-color: #9fb0ff;
+}
+.dark .form button {
+  background: var(--flux);
+  color: #fff;
+  border-left-color: var(--paper);
+}
+.dark .form button:hover {
+  background: var(--blue);
+}
+.dark .done {
+  background: #1d1b18;
+  border-color: var(--paper);
+  box-shadow: 5px 5px 0 var(--blue);
+}
+.dark .msg {
+  color: var(--paper);
+}
+.dark .dl a.releases {
+  color: #9fb0ff;
+}

@@ -1,0 +1,49 @@
+.steps {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
+  margin-top: 40px;
+}
+@media (max-width: 820px) {
+  .steps {
+    grid-template-columns: 1fr;
+  }
+}
+.step {
+  border: 1.5px solid var(--ink);
+  background: var(--paper-2);
+  padding: 22px 20px;
+  position: relative;
+}
+.step .no {
+  font-weight: 900;
+  font-size: 54px;
+  line-height: 0.8;
+  letter-spacing: -0.04em;
+}
+.step .no .pct {
+  color: var(--blue);
+}
+.step h3 {
+  font-size: 19px;
+  margin: 14px 0 8px;
+}
+.step p {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.7;
+  color: var(--ink-2);
+  margin: 0;
+}
+.step .tag {
+  position: absolute;
+  top: -11px;
+  right: 14px;
+  background: var(--flux);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 3px 8px;
+  transform: rotate(-1.2deg);
+  box-shadow: 2px 2px 0 var(--ink);
+}

@@ -1,0 +1,30 @@
+.proof {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  border-top: 1.5px solid var(--ink);
+  border-bottom: 1.5px solid var(--ink);
+  margin-top: 40px;
+}
+.cell {
+  padding: 20px 22px;
+  border-right: 1px solid var(--line);
+}
+.cell:last-child {
+  border-right: 0;
+}
+.k {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.n {
+  font-weight: 900;
+  font-size: 34px;
+  letter-spacing: -0.03em;
+  margin-top: 4px;
+}
+.n .arr {
+  color: var(--flux);
+}

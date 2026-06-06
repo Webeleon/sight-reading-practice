@@ -1,0 +1,56 @@
+.download {
+  background: var(--ink);
+  color: var(--paper);
+  position: relative;
+  overflow: hidden;
+}
+/* dark-band variant of the halftone texture (flux, lifted opacity) */
+.download .texHalf {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  mix-blend-mode: multiply;
+  background-size: 7px 7px;
+  opacity: 0.14;
+  background-image: radial-gradient(var(--flux) 22%, transparent 23%);
+}
+.inner {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  padding: 72px 24px;
+  position: relative;
+  z-index: 2;
+}
+.eyebrow {
+  color: var(--flux);
+}
+.download h2 {
+  font-size: clamp(32px, 6vw, 64px);
+  margin: 14px 0 0;
+  color: var(--paper);
+}
+.download h2 .u {
+  background: var(--flux);
+  color: #fff;
+  padding: 0 6px;
+}
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 36px;
+  align-items: center;
+  margin-top: 30px;
+}
+@media (max-width: 820px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+}
+.lede {
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.8;
+  color: #d9d4c8;
+  max-width: 44ch;
+}
