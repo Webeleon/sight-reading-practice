@@ -1,0 +1,271 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sight Reading — Signal Tape (C × D)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800;900&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing:border-box; }
+  :root{
+    --paper:#ECE7DA;      /* warm bone / newsprint */
+    --paper2:#F3EFE4;     /* lifted panel */
+    --ink:#141210;        /* near-black */
+    --ink-soft:#4a463f;
+    --blue:#1D3DF0;       /* ultramarine — structure / brand */
+    --flux:#FF5B1F;       /* flux orange — energy / live / feedback */
+    --grey:#8a8478;
+    --line:#cfc8b6;
+    --disp:"Archivo", system-ui, sans-serif;
+    --mono:"DM Mono", ui-monospace, monospace;
+  }
+  html,body{ margin:0; }
+  body{ background:#0f0f10; color:#e9e6df; font-family:var(--disp); -webkit-font-smoothing:antialiased; line-height:1.5; }
+
+  /* shared textures */
+  .halftone{ position:absolute; inset:0; pointer-events:none; opacity:.10; mix-blend-mode:multiply;
+    background-image:radial-gradient(var(--blue) 22%, transparent 23%); background-size:7px 7px; }
+  .halftone.warm{ background-image:radial-gradient(var(--flux) 22%, transparent 23%); }
+  .grain::after{ content:""; position:absolute; inset:0; pointer-events:none; mix-blend-mode:multiply; opacity:.35;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>"); }
+  /* crop-mark corners — the recurring print/record-sleeve motif */
+  .crops::before,.crops::after{ content:""; position:absolute; width:13px; height:13px; pointer-events:none; }
+  .crops::before{ left:9px; top:9px; border-left:1.5px solid var(--ink); border-top:1.5px solid var(--ink); }
+  .crops::after{ right:9px; bottom:9px; border-right:1.5px solid var(--ink); border-bottom:1.5px solid var(--ink); }
+
+  /* page chrome */
+  .page-head{ position:sticky; top:0; z-index:50; background:rgba(15,15,16,.92); backdrop-filter:blur(10px);
+    border-bottom:1px solid #2a2a2c; padding:13px 26px; display:flex; align-items:center; gap:18px; flex-wrap:wrap; }
+  .page-head h1{ font-size:14px; margin:0; font-weight:900; letter-spacing:-0.01em; }
+  .page-head .tag{ font-family:var(--mono); font-size:11px; color:#86827a; }
+  .page-head .badge{ margin-left:auto; font-family:var(--mono); font-size:11px; color:#0f0f10; background:var(--flux); padding:4px 10px; }
+  .wrap{ max-width:1180px; margin:0 auto; padding:30px 26px 90px; display:flex; flex-direction:column; gap:30px; }
+
+  .block-cap{ font-family:var(--mono); font-size:11px; letter-spacing:.16em; text-transform:uppercase; color:#86827a; margin:0 0 10px; display:flex; gap:10px; align-items:center; }
+  .block-cap::before{ content:""; width:18px; height:1px; background:#46443f; }
+
+  /* ---------- system / tokens ---------- */
+  .system{ background:var(--paper); color:var(--ink); border-radius:12px; padding:24px; position:relative; overflow:hidden; }
+  .sys-grid{ display:grid; grid-template-columns:1.1fr 1fr; gap:28px; position:relative; z-index:2; }
+  @media (max-width:820px){ .sys-grid{ grid-template-columns:1fr; } }
+  .swatches{ display:flex; gap:12px; flex-wrap:wrap; }
+  .sw{ width:96px; }
+  .sw .chip{ height:54px; border-radius:8px; border:1px solid rgba(0,0,0,.12); }
+  .sw .nm{ font-size:12px; margin-top:6px; font-weight:700; }
+  .sw .role{ font-family:var(--mono); font-size:10px; color:var(--grey); }
+  .sw .hex{ font-family:var(--mono); font-size:10px; color:var(--ink-soft); }
+  .specimen .lbl{ font-family:var(--mono); font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--grey); }
+  .specimen .big{ font-weight:900; font-size:50px; line-height:.92; letter-spacing:-0.04em; margin:2px 0 14px; }
+  .specimen .big .u{ background:var(--flux); color:#fff; padding:0 4px; }
+  .specimen .mono-row{ font-family:var(--mono); font-size:12px; letter-spacing:.06em; color:var(--ink-soft); border-top:1px solid var(--line); padding-top:10px; }
+
+  /* ===================== APP — PRACTICE ===================== */
+  .app{ background:var(--paper); color:var(--ink); border-radius:12px; overflow:hidden; position:relative; box-shadow:0 24px 60px rgba(0,0,0,.5); }
+  .app .topbar{ display:flex; align-items:center; justify-content:space-between; padding:14px 22px 10px; border-bottom:2px solid var(--ink); position:relative; z-index:2; }
+  .app .brand{ font-family:var(--mono); font-size:12px; letter-spacing:.22em; text-transform:uppercase; font-weight:500; }
+  .app .brand b{ color:var(--blue); }
+  .app .meta{ font-family:var(--mono); font-size:11px; letter-spacing:.05em; color:var(--ink-soft); }
+  .app .accent-rule{ height:3px; background:var(--blue); position:relative; z-index:2; }
+
+  .app .stage{ padding:26px 22px 8px; position:relative; z-index:2; }
+  .app .sheet{ background:var(--paper2); border:1.5px solid var(--ink); border-radius:4px; padding:16px 18px 10px; position:relative; }
+  .app .sheet .tape{ position:absolute; top:-11px; left:18px; background:var(--flux); color:#fff; font-family:var(--mono); font-size:10px; letter-spacing:.08em; padding:3px 8px; transform:rotate(-1.4deg); box-shadow:2px 2px 0 var(--ink); }
+  .app .sheet .clef-meta{ position:absolute; top:-10px; right:14px; background:var(--paper2); padding:0 6px; font-family:var(--mono); font-size:10px; color:var(--grey); }
+  .staff{ display:block; width:100%; height:auto; }
+
+  .app .console{ display:grid; grid-template-columns:1fr auto; gap:20px; align-items:end; padding:18px 22px 8px; position:relative; z-index:2; }
+  @media (max-width:760px){ .app .console{ grid-template-columns:1fr; } }
+  .transport{ display:flex; align-items:center; gap:12px; }
+  .btn-play{ display:inline-flex; align-items:center; gap:9px; background:var(--ink); color:var(--paper); font-weight:900; font-size:13px; letter-spacing:.1em; text-transform:uppercase; border:0; padding:13px 20px; cursor:default; }
+  .btn-ghost{ background:transparent; color:var(--ink); border:1.5px solid var(--ink); font-family:var(--mono); font-size:12px; padding:12px 16px; }
+  .countin{ font-family:var(--mono); font-size:11px; color:var(--grey); }
+  .countin b{ color:var(--flux); }
+
+  .feedback{ display:flex; align-items:flex-end; gap:22px; }
+  .vu{ }
+  .vu .vu-cap{ font-family:var(--mono); font-size:9px; letter-spacing:.14em; color:var(--grey); display:flex; justify-content:space-between; margin-bottom:5px; }
+  .vu .vu-cap .peak{ color:var(--flux); }
+  .vu .bars{ display:flex; gap:3px; align-items:flex-end; height:46px; width:188px; border-bottom:1.5px solid var(--ink); }
+  .vu .b{ flex:1; background:var(--blue); }
+  .vu .b.h{ background:var(--flux); }
+  .score{ text-align:right; }
+  .score .v{ font-weight:900; font-size:46px; line-height:.85; letter-spacing:-0.04em; }
+  .score .v sup{ font-size:16px; vertical-align:super; }
+  .score .l{ font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--grey); }
+
+  .app .statusbar{ display:flex; justify-content:space-between; align-items:center; margin-top:14px; border-top:1px solid var(--line); padding:9px 22px 16px; font-family:var(--mono); font-size:11px; color:var(--ink-soft); letter-spacing:.05em; position:relative; z-index:2; }
+  .app .statusbar .live{ color:var(--flux); }
+  .app .statusbar .chips{ display:flex; gap:14px; }
+
+  /* ===================== LANDING ===================== */
+  .land{ background:var(--paper); color:var(--ink); border-radius:12px; overflow:hidden; position:relative; box-shadow:0 24px 60px rgba(0,0,0,.5); }
+  .land .nav{ display:flex; justify-content:space-between; align-items:center; padding:16px 26px; border-bottom:1.5px solid var(--ink); font-family:var(--mono); font-size:11px; letter-spacing:.14em; text-transform:uppercase; position:relative; z-index:2; }
+  .land .nav .links{ display:flex; gap:20px; color:var(--ink-soft); }
+  .land .hero{ padding:46px 30px 30px; position:relative; z-index:2; }
+  .land .kick{ font-family:var(--mono); font-size:12px; letter-spacing:.18em; text-transform:uppercase; color:var(--ink-soft); display:flex; align-items:center; gap:12px; }
+  .land .kick .reg{ color:var(--blue); }
+  .land h2{ font-weight:900; font-size:62px; line-height:.92; letter-spacing:-0.045em; margin:18px 0 0; max-width:16ch; }
+  .land h2 .u{ background:var(--flux); color:#fff; padding:0 6px; }
+  .land h2 .blue{ color:var(--blue); }
+  .land .herometa{ display:grid; grid-template-columns:1.4fr 1fr; gap:26px; align-items:end; margin-top:30px; }
+  @media (max-width:760px){ .land .herometa{ grid-template-columns:1fr; } }
+  .land .sub{ font-family:var(--mono); font-size:13px; color:var(--ink-soft); max-width:42ch; line-height:1.7; }
+  .land .cta{ display:flex; gap:14px; align-items:center; }
+  .btn-go{ background:var(--ink); color:var(--paper); font-weight:900; font-size:13px; letter-spacing:.08em; text-transform:uppercase; border:0; padding:15px 22px; box-shadow:4px 4px 0 var(--flux); cursor:default; }
+  .btn-demo{ background:transparent; color:var(--ink); border:1.5px solid var(--ink); font-family:var(--mono); font-size:12px; padding:14px 18px; }
+
+  /* proof strip — "see the results" tease */
+  .proof{ display:grid; grid-template-columns:repeat(3,1fr); border-top:1.5px solid var(--ink); position:relative; z-index:2; }
+  .proof .cell{ padding:18px 22px; border-right:1px solid var(--line); }
+  .proof .cell:last-child{ border-right:0; }
+  .proof .k{ font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase; color:var(--grey); }
+  .proof .n{ font-weight:900; font-size:30px; letter-spacing:-0.03em; margin-top:4px; }
+  .proof .n .arr{ color:var(--flux); }
+  .proof .spark{ margin-top:6px; }
+  .foot{ text-align:center; color:#86827a; font-size:14px; padding:24px 20px 0; line-height:1.7; }
+  .foot b{ color:#e9e6df; }
+</style>
+</head>
+<body>
+  <header class="page-head">
+    <h1>🎸 Sight Reading</h1>
+    <span class="tag">direction: SIGNAL × TAPE — working name "Test Pressing"</span>
+    <span class="badge">C × D FUSION</span>
+  </header>
+
+  <div class="wrap">
+
+    <!-- =============== SYSTEM =============== -->
+    <section>
+      <p class="block-cap">The system</p>
+      <div class="system grain crops">
+        <div class="sys-grid">
+          <div>
+            <div class="swatches">
+              <div class="sw"><div class="chip" style="background:#ECE7DA"></div><div class="nm">Bone</div><div class="role">canvas</div><div class="hex">#ECE7DA</div></div>
+              <div class="sw"><div class="chip" style="background:#141210"></div><div class="nm">Ink</div><div class="role">type / rules</div><div class="hex">#141210</div></div>
+              <div class="sw"><div class="chip" style="background:#1D3DF0"></div><div class="nm">Ultramarine</div><div class="role">structure</div><div class="hex">#1D3DF0</div></div>
+              <div class="sw"><div class="chip" style="background:#FF5B1F"></div><div class="nm">Flux</div><div class="role">live / feedback</div><div class="hex">#FF5B1F</div></div>
+            </div>
+            <p style="font-family:var(--mono); font-size:11.5px; color:var(--ink-soft); margin-top:16px; max-width:46ch; line-height:1.8;">
+              Two-colour discipline with meaning: <b style="color:var(--blue)">blue = structure &amp; brand</b>, <b style="color:var(--flux)">orange = energy, the live note, the feedback needle</b>. Halftone + grain carry the riso warmth; crop-marks &amp; the strict grid carry the sleeve austerity.
+            </p>
+          </div>
+          <div class="specimen">
+            <div class="lbl">Display — Archivo Black</div>
+            <div class="big">Read <span class="u">music.</span></div>
+            <div class="lbl">Captions / data — DM Mono</div>
+            <div class="mono-row">LINE 07 / 30 · C MAJOR · POS.5 · ♩96 · PITCH 92 · TIME 88</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- =============== APP — PRACTICE =============== -->
+    <section>
+      <p class="block-cap">App — practice screen</p>
+      <div class="app crops">
+        <div class="halftone"></div>
+        <div class="topbar">
+          <span class="brand">SIGHT <b>READING</b></span>
+          <span class="meta">LINE 07 / 30 · C MAJOR · POS.5 · ♩ 96</span>
+        </div>
+        <div class="accent-rule"></div>
+
+        <div class="stage">
+          <div class="sheet">
+            <span class="tape">★ TAKE 7 · FIRST READ</span>
+            <span class="clef-meta">treble · 4/4</span>
+            <svg class="staff" viewBox="0 0 760 96" aria-label="staff">
+              <g stroke="#141210" stroke-width="1.1">
+                <line x1="8" y1="20" x2="752" y2="20"/><line x1="8" y1="34" x2="752" y2="34"/><line x1="8" y1="48" x2="752" y2="48"/><line x1="8" y1="62" x2="752" y2="62"/><line x1="8" y1="76" x2="752" y2="76"/>
+              </g>
+              <text x="10" y="68" font-size="52" fill="#141210" font-family="serif">𝄞</text>
+              <!-- barlines -->
+              <g stroke="#141210" stroke-width="1.4"><line x1="250" y1="20" x2="250" y2="76"/><line x1="500" y1="20" x2="500" y2="76"/><line x1="750" y1="20" x2="750" y2="76"/></g>
+              <!-- read notes (ink) -->
+              <g fill="#141210">
+                <ellipse cx="120" cy="62" rx="7.5" ry="5.2"/><rect x="126.5" y="34" width="2" height="28"/>
+                <ellipse cx="180" cy="48" rx="7.5" ry="5.2"/><rect x="186.5" y="20" width="2" height="28"/>
+              </g>
+              <!-- current note (flux + cursor band) -->
+              <rect x="296" y="14" width="22" height="68" fill="#FF5B1F" opacity="0.16"/>
+              <ellipse cx="307" cy="41" rx="8" ry="5.4" fill="#FF5B1F"/><rect x="314" y="13" width="2" height="28" fill="#FF5B1F"/>
+              <!-- upcoming notes (ink) -->
+              <g fill="#141210">
+                <ellipse cx="380" cy="55" rx="7.5" ry="5.2"/><rect x="386.5" y="27" width="2" height="28"/>
+                <ellipse cx="440" cy="34" rx="7.5" ry="5.2"/><rect x="446.5" y="6" width="2" height="28"/>
+                <ellipse cx="560" cy="48" rx="7.5" ry="5.2"/><rect x="566.5" y="20" width="2" height="28"/>
+                <ellipse cx="620" cy="41" rx="7.5" ry="5.2"/><rect x="626.5" y="13" width="2" height="28"/>
+                <ellipse cx="690" cy="55" rx="7.5" ry="5.2"/><rect x="696.5" y="27" width="2" height="28"/>
+              </g>
+            </svg>
+          </div>
+        </div>
+
+        <div class="console">
+          <div class="transport">
+            <button class="btn-play">▶ Play line</button>
+            <button class="btn-ghost">Next ⏎</button>
+            <span class="countin">count-in <b>4 · 3 · 2 · 1</b></span>
+          </div>
+          <div class="feedback">
+            <div class="vu">
+              <div class="vu-cap"><span>INPUT</span><span class="peak">PEAK +3</span></div>
+              <div class="bars">
+                <span class="b" style="height:24%"></span><span class="b" style="height:40%"></span><span class="b" style="height:32%"></span>
+                <span class="b" style="height:58%"></span><span class="b" style="height:46%"></span><span class="b" style="height:70%"></span>
+                <span class="b h" style="height:98%"></span><span class="b" style="height:62%"></span><span class="b" style="height:50%"></span>
+                <span class="b" style="height:38%"></span><span class="b" style="height:28%"></span><span class="b" style="height:20%"></span>
+              </div>
+            </div>
+            <div class="score"><div class="v">92<sup>%</sup></div><div class="l">pitch</div></div>
+          </div>
+        </div>
+
+        <div class="statusbar">
+          <span><span class="live">● LIVE</span> · detecting (CREPE)</span>
+          <span class="chips"><span>FIRST READ</span><span>TIMING 88%</span><span>SAVED ●</span></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- =============== LANDING =============== -->
+    <section>
+      <p class="block-cap">Landing — GitHub Pages hero</p>
+      <div class="land crops">
+        <div class="halftone warm"></div>
+        <div class="nav">
+          <span>SIGHT READING ✛</span>
+          <span class="links"><span>The problem</span><span>How it works</span><span>The proof</span><span>FAQ</span></span>
+        </div>
+        <div class="hero">
+          <div class="kick"><span class="reg">✛</span> A sight-reading gym for guitarists · <span>EST. 2026</span></div>
+          <h2>Reading music shouldn't feel like a <span class="u">wall.</span></h2>
+          <div class="herometa">
+            <p class="sub">You already play. But the dots on the page still freeze you. This turns reading into a five-minute daily habit — fresh lines, a needle that doesn't lie, and proof you're getting better.</p>
+            <div class="cta">
+              <button class="btn-go">Get early access →</button>
+              <button class="btn-demo">▶ play the demo</button>
+            </div>
+          </div>
+        </div>
+        <div class="proof">
+          <div class="cell"><div class="k">Week 1 → Week 6</div><div class="n">54% <span class="arr">→</span> 91%</div></div>
+          <div class="cell"><div class="k">Lines read</div><div class="n">312</div></div>
+          <div class="cell"><div class="k">Current streak</div><div class="n">18 days</div>
+            <svg class="spark" width="120" height="20" viewBox="0 0 120 20"><polyline fill="none" stroke="#1D3DF0" stroke-width="2" points="0,16 15,14 30,15 45,10 60,11 75,7 90,8 105,4 120,3"/></svg>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <p class="foot">
+      This is the merged direction. If it feels right, tell me <b>two things</b> and I'll build the full set:<br/>
+      1) landing goal — <b>waitlist</b> / <b>download + GitHub</b> / <b>both</b> &nbsp;·&nbsp; 2) which app screens — <b>Practice</b>, <b>Results</b>, <b>Progress</b>, <b>Onboarding</b>.
+    </p>
+  </div>
+</body>
+</html>

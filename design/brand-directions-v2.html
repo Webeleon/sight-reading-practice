@@ -1,0 +1,419 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sight Reading — concept directions (v2)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Spectral:ital,wght@0,400;0,600;0,800;1,400;1,600&family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,700;12..96,800&family=Archivo:wght@400;600;900&family=Space+Mono:wght@400;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  :root { --page-bg:#101216; --page-fg:#e9eaed; --page-muted:#8b9099; }
+  html, body { margin:0; }
+  body { background:var(--page-bg); color:var(--page-fg); font-family:"Archivo",system-ui,sans-serif; -webkit-font-smoothing:antialiased; line-height:1.5; }
+
+  /* paper grain + halftone reusable textures (data-uri SVG noise) */
+  .grain::after {
+    content:""; position:absolute; inset:0; pointer-events:none; mix-blend-mode:multiply; opacity:.5;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  }
+
+  .page-head { position:sticky; top:0; z-index:50; background:rgba(16,18,22,.92); backdrop-filter:blur(10px); border-bottom:1px solid #2a2d34; padding:14px 28px; display:flex; align-items:center; gap:20px; flex-wrap:wrap; }
+  .page-head h1 { font-size:15px; margin:0; font-weight:900; letter-spacing:-0.01em; }
+  .page-head .hint { color:var(--page-muted); font-size:13px; margin:0; }
+  .jump { margin-left:auto; display:flex; gap:8px; flex-wrap:wrap; }
+  .jump a { color:var(--page-fg); text-decoration:none; font-size:12px; font-weight:700; padding:6px 11px; border:1px solid #353941; border-radius:999px; }
+  .jump a:hover { background:#262a31; }
+
+  .wrap { max-width:1200px; margin:0 auto; padding:0 28px 90px; }
+  .dir { padding:60px 0 14px; border-bottom:1px dashed #2f333b; }
+  .dir-id { display:inline-flex; align-items:center; gap:10px; font-size:11px; font-weight:900; letter-spacing:0.16em; text-transform:uppercase; color:var(--page-muted); }
+  .dir-id b { display:inline-grid; place-items:center; width:26px; height:26px; border-radius:7px; background:#262a31; color:#fff; font-size:13px; }
+  .dir-name { font-size:30px; margin:10px 0 2px; font-weight:900; letter-spacing:-0.02em; }
+  .dir-concept { color:var(--page-muted); margin:0 0 22px; font-size:15px; max-width:74ch; }
+  .dir-concept em { color:#cfd3da; font-style:normal; border-bottom:1px solid #3a3f48; }
+
+  .swatches { display:flex; gap:12px; flex-wrap:wrap; margin:0 0 26px; }
+  .sw { width:104px; }
+  .sw .chip { height:56px; border-radius:10px; border:1px solid rgba(255,255,255,.08); }
+  .sw .nm { font-size:12px; margin-top:6px; font-weight:700; }
+  .sw .hex { font-size:10.5px; color:var(--page-muted); font-family:"DM Mono",ui-monospace,monospace; }
+
+  .demos { display:grid; grid-template-columns:1fr 1fr; gap:22px; }
+  @media (max-width:920px){ .demos { grid-template-columns:1fr; } }
+  .demo-cap { font-size:11px; font-weight:900; letter-spacing:0.12em; text-transform:uppercase; color:var(--page-muted); margin:0 0 8px; }
+  .frame { border-radius:14px; overflow:hidden; position:relative; box-shadow:0 20px 55px rgba(0,0,0,.5); border:1px solid rgba(255,255,255,.06); }
+  .pane { position:relative; min-height:300px; }
+  .staff { display:block; width:100%; height:auto; }
+
+  /* ===================================================================
+     A — ENGRAVER'S PLATE  (music-publishing heritage / letterpress)
+  =================================================================== */
+  .A { --ink:#1a1814; --paper:#efe7d3; --paper2:#f6f0e0; --rubric:#b3331f; --pencil:#5a6b7a; --grey:#8a8270; }
+  .A .pane { background:var(--paper); color:var(--ink); font-family:"Spectral",Georgia,serif; padding:22px 24px; }
+  .A .plate-top { display:flex; justify-content:space-between; align-items:baseline; border-bottom:2px solid var(--ink); padding-bottom:8px; }
+  .A .plate-top .t { font-weight:800; font-size:15px; letter-spacing:.02em; }
+  .A .plate-top .no { font-family:"Spectral"; font-style:italic; color:var(--rubric); font-size:13px; }
+  .A .opus { text-align:center; margin:16px 0 4px; }
+  .A .opus .k { font-variant:small-caps; letter-spacing:.22em; font-size:12px; color:var(--grey); }
+  .A .opus .h { font-size:22px; font-weight:800; letter-spacing:.01em; }
+  .A .opus .h em { color:var(--rubric); font-style:italic; }
+  .A .engr { margin-top:8px; }
+  .A .credit { display:flex; justify-content:space-between; font-style:italic; font-size:12px; color:var(--grey); margin-top:6px; }
+  .A .credit .pencil { color:var(--pencil); transform:rotate(-1.5deg); }
+  .A .footrule { margin-top:16px; border-top:1px solid #c9bfa4; padding-top:8px; display:flex; justify-content:space-between; font-size:11px; color:var(--grey); font-variant:small-caps; letter-spacing:.16em; }
+  /* landing */
+  .A .land { background:var(--paper2); color:var(--ink); font-family:"Spectral",serif; padding:26px 26px; }
+  .A .land .rule { width:46px; height:3px; background:var(--rubric); margin-bottom:14px; }
+  .A .land .kick { font-variant:small-caps; letter-spacing:.2em; font-size:12px; color:var(--grey); }
+  .A .land h2 { font-size:30px; line-height:1.08; margin:8px 0 12px; font-weight:800; }
+  .A .land h2 em { color:var(--rubric); font-style:italic; }
+  .A .land p { font-size:14px; color:#46402f; max-width:40ch; margin:0 0 18px; }
+  .A .land .cta { display:flex; gap:14px; align-items:center; }
+  .A .btn { font-family:"Spectral"; font-weight:800; font-size:13px; border:0; padding:11px 18px; cursor:default; }
+  .A .btn-go { background:var(--ink); color:var(--paper); }
+  .A .btn-li { background:transparent; color:var(--ink); border:1.5px solid var(--ink); font-style:italic; }
+
+  /* ===================================================================
+     B — FRETBOARD  (the guitarist's native grid: wood, inlay, hardware)
+  =================================================================== */
+  .B { --eb:#2b211b; --eb2:#1c1611; --maple:#d9b483; --rose:#5a3a26; --brass:#caa05a; --nickel:#cfd2d6; --cream:#f3ead6; --ink:#1a1410; --string:#cdb89a; }
+  .B .pane { background:linear-gradient(180deg,#241a14,#160f0b); color:#eadfce; font-family:"Space Mono",monospace; padding:0; }
+  .B .neck { background:
+      repeating-linear-gradient(90deg, rgba(0,0,0,.18) 0 2px, transparent 2px 7px),
+      linear-gradient(180deg,#3a2a1f,#241813); padding:14px 18px; position:relative; }
+  .B .nut { position:absolute; left:0; top:0; bottom:0; width:8px; background:linear-gradient(90deg,#efe6d4,#c9bda3); }
+  .B .frets { position:absolute; inset:0; pointer-events:none; }
+  .B .fret { position:absolute; top:0; bottom:0; width:3px; background:linear-gradient(90deg,#f1f3f6,#9a9ea5,#d4d7dc); }
+  .B .strings { position:relative; height:74px; margin:6px 0 2px 10px; }
+  .B .str { position:absolute; left:0; right:0; height:1px; background:linear-gradient(90deg,var(--string),#a99877); box-shadow:0 1px 0 rgba(0,0,0,.4); }
+  .B .dot { position:absolute; width:13px; height:13px; border-radius:50%; background:radial-gradient(circle at 35% 30%,#fff,#cfd9e2 40%,#8f9aa6); transform:translate(-50%,-50%); }
+  .B .note { position:absolute; transform:translate(-50%,-50%); width:22px; height:22px; border-radius:50%; display:grid; place-items:center; font-size:10px; font-weight:700; color:#1a1410; }
+  .B .topbar { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; background:#160f0b; border-bottom:1px solid #3a2a1f; }
+  .B .topbar .t { font-weight:700; letter-spacing:.04em; font-size:13px; color:var(--cream); }
+  .B .topbar .t b { color:var(--brass); }
+  .B .topbar .chip { font-size:11px; color:#c9bda3; border:1px solid #4a382a; padding:3px 9px; border-radius:4px; }
+  .B .readout { display:flex; gap:0; border-top:1px solid #3a2a1f; }
+  .B .gauge { flex:1; padding:11px 14px; border-right:1px solid #3a2a1f; }
+  .B .gauge:last-child { border-right:0; }
+  .B .gauge .l { font-size:10px; color:#9c8b73; letter-spacing:.1em; }
+  .B .gauge .v { font-size:20px; font-weight:700; color:var(--brass); }
+  .B .gauge .v.ok { color:#7fd6a0; }
+  /* notation strip on cream so it still reads as sight-reading */
+  .B .sheet { background:var(--cream); padding:10px 14px; }
+  /* landing */
+  .B .land { background:linear-gradient(180deg,#241a14,#120c08); color:#eadfce; font-family:"Bricolage Grotesque",sans-serif; padding:26px 24px; position:relative; overflow:hidden; }
+  .B .land .lines { position:absolute; inset:0; opacity:.5; background:repeating-linear-gradient(180deg,transparent 0 16px, rgba(205,184,154,.25) 16px 17px); }
+  .B .land .inner { position:relative; }
+  .B .land .kick { font-family:"Space Mono"; font-size:11px; letter-spacing:.18em; text-transform:uppercase; color:var(--brass); }
+  .B .land h2 { font-size:30px; line-height:1.02; margin:10px 0 12px; font-weight:800; letter-spacing:-0.01em; }
+  .B .land h2 b { color:var(--brass); }
+  .B .land p { font-size:13px; color:#cbbda4; max-width:36ch; margin:0 0 18px; font-family:"Space Mono"; }
+  .B .land .cta { display:flex; gap:12px; }
+  .B .btn-go { background:var(--brass); color:#1a1410; font-weight:800; border:0; border-radius:5px; padding:11px 18px; font-size:13px; font-family:"Bricolage Grotesque"; }
+  .B .btn-li { background:transparent; color:#eadfce; border:1px solid #6a5340; border-radius:5px; padding:11px 18px; font-size:13px; font-family:"Space Mono"; }
+
+  /* ===================================================================
+     C — SIGNAL  (austere record-sleeve / Swiss; type-led, one accent)
+  =================================================================== */
+  .C { --bone:#e7e4dc; --bone2:#eeece5; --ink:#0c0c0c; --signal:#e8ff2f; --signal2:#c8de1e; --grey:#777; }
+  .C .pane { background:var(--bone); color:var(--ink); font-family:"Archivo",sans-serif; padding:22px 24px; display:flex; flex-direction:column; min-height:320px; }
+  .C .grid-top { display:flex; justify-content:space-between; font-size:10px; letter-spacing:.18em; text-transform:uppercase; color:var(--ink); border-bottom:1px solid var(--ink); padding-bottom:6px; }
+  .C .big { font-weight:900; font-size:64px; line-height:.9; letter-spacing:-0.04em; margin:18px 0 2px; }
+  .C .big .u { background:var(--signal); padding:0 4px; }
+  .C .sub { font-size:12px; letter-spacing:.04em; color:#333; max-width:30ch; }
+  .C .diagram { margin:auto 0 0; }
+  .C .grid-bot { display:flex; justify-content:space-between; align-items:flex-end; margin-top:14px; border-top:1px solid var(--ink); padding-top:8px; }
+  .C .grid-bot .m { font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--grey); }
+  .C .grid-bot .score { font-weight:900; font-size:30px; line-height:1; }
+  .C .grid-bot .score sup { font-size:13px; }
+  .C .play { display:inline-flex; align-items:center; gap:8px; background:var(--ink); color:var(--bone); font-weight:900; font-size:12px; letter-spacing:.1em; text-transform:uppercase; padding:9px 14px; }
+  /* landing */
+  .C .land { background:var(--bone2); color:var(--ink); font-family:"Archivo",sans-serif; padding:24px; display:flex; flex-direction:column; min-height:320px; }
+  .C .land .kick { font-size:10px; letter-spacing:.2em; text-transform:uppercase; border-bottom:1px solid var(--ink); padding-bottom:6px; display:flex; justify-content:space-between; }
+  .C .land h2 { font-weight:900; font-size:46px; line-height:.92; letter-spacing:-0.045em; margin:20px 0 0; }
+  .C .land h2 .u { background:var(--signal); padding:0 4px; }
+  .C .land .foot2 { margin-top:auto; display:flex; justify-content:space-between; align-items:flex-end; gap:16px; }
+  .C .land p { font-size:12.5px; color:#333; max-width:30ch; margin:0; }
+  .C .btn-go { background:var(--ink); color:var(--bone); font-weight:900; font-size:12px; letter-spacing:.08em; text-transform:uppercase; border:0; padding:13px 18px; }
+
+  /* ===================================================================
+     D — PRACTICE TAPE  (analog studio / riso duotone, VU feedback)
+  =================================================================== */
+  .D { --news:#eae6db; --ink:#171515; --flux:#ff5b1f; --ultra:#1d3df0; --tape:#f5efe0; --grey:#7a766c; }
+  .D .pane { background:var(--news); color:var(--ink); font-family:"DM Mono",monospace; padding:20px 22px; position:relative; }
+  .D .halftone { position:absolute; inset:0; pointer-events:none; opacity:.16; mix-blend-mode:multiply;
+    background-image:radial-gradient(var(--ultra) 22%, transparent 23%); background-size:7px 7px; }
+  .D .deck { display:flex; justify-content:space-between; align-items:center; position:relative; }
+  .D .label { background:var(--flux); color:#fff; font-weight:500; font-size:11px; letter-spacing:.05em; padding:4px 9px; transform:rotate(-1.2deg); box-shadow:2px 2px 0 var(--ink); }
+  .D .reel { font-size:11px; color:var(--grey); letter-spacing:.08em; }
+  .D .card { background:var(--tape); border:1.5px solid var(--ink); margin-top:14px; padding:12px 14px; position:relative; box-shadow:4px 4px 0 var(--ink); }
+  .D .stamp { font-family:"Bricolage Grotesque"; font-weight:800; font-size:13px; letter-spacing:.02em; margin-bottom:8px; display:flex; justify-content:space-between; }
+  .D .stamp b { color:var(--flux); }
+  /* VU meter */
+  .D .vu { margin-top:14px; background:#101010; border:1.5px solid var(--ink); padding:10px 12px; position:relative; }
+  .D .vu .scale { display:flex; justify-content:space-between; font-size:9px; color:#9a9; letter-spacing:.1em; margin-bottom:6px; }
+  .D .vu .bars { display:flex; gap:3px; align-items:flex-end; height:34px; }
+  .D .vu .b { flex:1; background:var(--ultra); }
+  .D .vu .b.h { background:var(--flux); }
+  .D .vu .needle { position:absolute; right:14px; top:8px; font-size:10px; color:var(--flux); font-weight:500; }
+  /* landing */
+  .D .land { background:var(--news); color:var(--ink); font-family:"Bricolage Grotesque",sans-serif; padding:24px 22px; position:relative; overflow:hidden; }
+  .D .land .halftone { background-image:radial-gradient(var(--flux) 22%, transparent 23%); background-size:8px 8px; opacity:.18; }
+  .D .land .inner { position:relative; }
+  .D .land .kick { font-family:"DM Mono"; font-size:11px; letter-spacing:.14em; text-transform:uppercase; color:var(--ultra); }
+  .D .land h2 { font-size:32px; line-height:1.0; margin:10px 0 12px; font-weight:800; letter-spacing:-0.02em; }
+  .D .land h2 mark { background:var(--flux); color:#fff; padding:0 4px; }
+  .D .land p { font-family:"DM Mono"; font-size:12.5px; color:#403c34; max-width:38ch; margin:0 0 18px; }
+  .D .land .cta { display:flex; gap:12px; align-items:center; }
+  .D .btn-go { background:var(--ink); color:var(--news); font-weight:800; border:0; padding:12px 18px; font-size:13px; box-shadow:3px 3px 0 var(--flux); font-family:"Bricolage Grotesque"; }
+  .D .btn-li { background:transparent; color:var(--ink); border:1.5px solid var(--ink); padding:12px 18px; font-size:12px; font-family:"DM Mono"; }
+
+  .foot { text-align:center; color:var(--page-muted); font-size:14px; padding:50px 20px 10px; line-height:1.7; }
+  .foot b { color:var(--page-fg); }
+</style>
+</head>
+<body>
+  <header class="page-head">
+    <h1>🎸 Sight Reading — concept directions <span style="color:#777">v2</span></h1>
+    <p class="hint">Concept-led, not template-led. Each rooted in music/guitar craft.</p>
+    <nav class="jump">
+      <a href="#A">A · Engraver's Plate</a>
+      <a href="#B">B · Fretboard</a>
+      <a href="#C">C · Signal</a>
+      <a href="#D">D · Practice Tape</a>
+    </nav>
+  </header>
+
+  <div class="wrap">
+
+    <!-- ============ A — ENGRAVER'S PLATE ============ -->
+    <section class="dir A" id="A">
+      <span class="dir-id"><b>A</b> Concept</span>
+      <h2 class="dir-name">Engraver's Plate</h2>
+      <p class="dir-concept">The 300-year craft of <em>music engraving</em> — etched staves, classical publishing serif, vermillion rubrics, plate numbers, and pencil corrections as your feedback. Looks like a beautifully printed étude method book that happens to be alive. Heritage, seriousness, the opposite of a SaaS card.</p>
+      <div class="swatches">
+        <div class="sw"><div class="chip" style="background:#efe7d3"></div><div class="nm">Manuscript</div><div class="hex">#EFE7D3</div></div>
+        <div class="sw"><div class="chip" style="background:#1a1814"></div><div class="nm">Plate ink</div><div class="hex">#1A1814</div></div>
+        <div class="sw"><div class="chip" style="background:#b3331f"></div><div class="nm">Rubric red</div><div class="hex">#B3331F</div></div>
+        <div class="sw"><div class="chip" style="background:#5a6b7a"></div><div class="nm">Pencil</div><div class="hex">#5A6B7A</div></div>
+        <div class="sw"><div class="chip" style="background:#8a8270"></div><div class="nm">Faded</div><div class="hex">#8A8270</div></div>
+      </div>
+      <div class="demos">
+        <div>
+          <p class="demo-cap">App — practice</p>
+          <div class="frame"><div class="pane grain">
+            <div class="plate-top"><span class="t">SIGHT READING</span><span class="no">Pl. 7 — N.º 30</span></div>
+            <div class="opus"><div class="k">Étude in</div><div class="h">C major <em>·</em> 5th position</div></div>
+            <svg class="staff engr" viewBox="0 0 520 78" aria-label="engraved staff">
+              <g stroke="#1a1814" stroke-width="1">
+                <line x1="6" y1="14" x2="514" y2="14"/><line x1="6" y1="26" x2="514" y2="26"/><line x1="6" y1="38" x2="514" y2="38"/><line x1="6" y1="50" x2="514" y2="50"/><line x1="6" y1="62" x2="514" y2="62"/>
+              </g>
+              <text x="8" y="56" font-size="44" fill="#1a1814" font-family="serif">𝄞</text>
+              <g fill="#1a1814">
+                <ellipse cx="120" cy="50" rx="6.5" ry="4.6"/><rect x="125" y="26" width="1.6" height="24"/>
+                <ellipse cx="165" cy="38" rx="6.5" ry="4.6"/><rect x="170" y="14" width="1.6" height="24"/>
+              </g>
+              <ellipse cx="215" cy="32" rx="6.5" ry="4.6" fill="#1a1814"/><rect x="220" y="8" width="1.6" height="24" fill="#1a1814"/>
+              <ellipse cx="265" cy="44" rx="6.5" ry="4.6" fill="#b3331f"/><rect x="270" y="20" width="1.6" height="24" fill="#b3331f"/>
+              <g fill="#1a1814">
+                <ellipse cx="320" cy="38" rx="6.5" ry="4.6"/><rect x="325" y="14" width="1.6" height="24"/>
+                <ellipse cx="375" cy="26" rx="6.5" ry="4.6"/><rect x="380" y="2" width="1.6" height="24"/>
+                <ellipse cx="430" cy="38" rx="6.5" ry="4.6"/><rect x="435" y="14" width="1.6" height="24"/>
+              </g>
+              <text x="258" y="74" font-size="11" fill="#5a6b7a" font-family="Spectral" font-style="italic" transform="rotate(-2 258 74)">a hair late ◡</text>
+            </svg>
+            <div class="credit"><span class="pencil">✎ watch the F♯ — twice now</span><span>♩ = 96</span></div>
+            <div class="footrule"><span>First read</span><span>Pitch 92 · Time 88</span></div>
+          </div></div>
+        </div>
+        <div>
+          <p class="demo-cap">Landing — hero</p>
+          <div class="frame"><div class="land grain">
+            <div class="rule"></div>
+            <div class="kick">A reading method for guitarists</div>
+            <h2>The notes on the page<br/>stop being <em>strangers.</em></h2>
+            <p>A fresh étude every day, engraved to read clearly, with a quiet hand marking what to fix.</p>
+            <div class="cta"><button class="btn btn-go">Get early access</button><button class="btn btn-li">Read the method</button></div>
+          </div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ B — FRETBOARD ============ -->
+    <section class="dir B" id="B">
+      <span class="dir-id"><b>B</b> Concept</span>
+      <h2 class="dir-name">Fretboard</h2>
+      <p class="dir-concept">The <em>guitarist's native grid</em>: ebony fingerboard, pearl inlay dots, brass &amp; nickel hardware, strings as rules. The UI is built on the instrument itself — tactile, physical, unmistakably guitar. No other practice app looks like a thing you'd hold.</p>
+      <div class="swatches">
+        <div class="sw"><div class="chip" style="background:#241813"></div><div class="nm">Ebony</div><div class="hex">#241813</div></div>
+        <div class="sw"><div class="chip" style="background:#caa05a"></div><div class="nm">Brass</div><div class="hex">#CAA05A</div></div>
+        <div class="sw"><div class="chip" style="background:#cfd2d6"></div><div class="nm">Nickel</div><div class="hex">#CFD2D6</div></div>
+        <div class="sw"><div class="chip" style="background:#f3ead6"></div><div class="nm">Sheet</div><div class="hex">#F3EAD6</div></div>
+        <div class="sw"><div class="chip" style="background:#7fd6a0"></div><div class="nm">In tune</div><div class="hex">#7FD6A0</div></div>
+      </div>
+      <div class="demos">
+        <div>
+          <p class="demo-cap">App — practice</p>
+          <div class="frame"><div class="pane">
+            <div class="topbar"><span class="t">Sight <b>Reading</b></span><span class="chip">C major · pos. 5 · ♩96</span></div>
+            <div class="sheet">
+              <svg class="staff" viewBox="0 0 520 66" aria-label="staff">
+                <g stroke="#b9ab8e" stroke-width="1">
+                  <line x1="6" y1="12" x2="514" y2="12"/><line x1="6" y1="23" x2="514" y2="23"/><line x1="6" y1="34" x2="514" y2="34"/><line x1="6" y1="45" x2="514" y2="45"/><line x1="6" y1="56" x2="514" y2="56"/>
+                </g>
+                <text x="8" y="50" font-size="40" fill="#1a1410" font-family="serif">𝄞</text>
+                <g fill="#1a1410">
+                  <ellipse cx="130" cy="45" rx="6" ry="4.3"/><ellipse cx="180" cy="34" rx="6" ry="4.3"/>
+                  <ellipse cx="230" cy="28" rx="6" ry="4.3"/><ellipse cx="300" cy="34" rx="6" ry="4.3"/>
+                  <ellipse cx="360" cy="23" rx="6" ry="4.3"/><ellipse cx="430" cy="34" rx="6" ry="4.3"/>
+                </g>
+              </svg>
+            </div>
+            <div class="neck">
+              <div class="nut"></div>
+              <div class="frets"><span class="fret" style="left:24%"></span><span class="fret" style="left:48%"></span><span class="fret" style="left:70%"></span><span class="fret" style="left:90%"></span></div>
+              <div class="strings">
+                <span class="str" style="top:4px"></span><span class="str" style="top:18px"></span><span class="str" style="top:32px"></span>
+                <span class="str" style="top:46px"></span><span class="str" style="top:60px"></span><span class="str" style="top:72px"></span>
+                <span class="dot" style="left:48%;top:38px"></span><span class="dot" style="left:90%;top:18px"></span><span class="dot" style="left:90%;top:60px"></span>
+                <span class="note" style="left:36%;top:32px;background:#7fd6a0">5</span>
+                <span class="note" style="left:60%;top:18px;background:#caa05a">7</span>
+                <span class="note" style="left:60%;top:46px;background:#e06a5a;color:#fff">7</span>
+              </div>
+            </div>
+            <div class="readout">
+              <div class="gauge"><div class="l">PITCH</div><div class="v ok">92%</div></div>
+              <div class="gauge"><div class="l">TIMING</div><div class="v">88%</div></div>
+              <div class="gauge"><div class="l">STREAK</div><div class="v">×4</div></div>
+            </div>
+          </div></div>
+        </div>
+        <div>
+          <p class="demo-cap">Landing — hero</p>
+          <div class="frame"><div class="land">
+            <div class="lines"></div>
+            <div class="inner">
+              <div class="kick">Sight-reading // for guitarists</div>
+              <h2>You already play.<br/>Now <b>read</b> what you play.</h2>
+              <p>Built on the fretboard you know — lines to read, notes to nail, position by position.</p>
+              <div class="cta"><button class="btn-go">Get early access</button><button class="btn-li">See the neck</button></div>
+            </div>
+          </div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ C — SIGNAL ============ -->
+    <section class="dir C" id="C">
+      <span class="dir-id"><b>C</b> Concept</span>
+      <h2 class="dir-name">Signal</h2>
+      <p class="dir-concept">Austere <em>record-sleeve minimalism</em> (think ECM / Swiss international): bone paper, near-black ink, ONE acid-green signal colour, oversized expanded type, strict grid, ruthless whitespace. Notation treated as a diagram. Gallery-grade, timeless, design-forward — reads as a serious tool, not a toy.</p>
+      <div class="swatches">
+        <div class="sw"><div class="chip" style="background:#e7e4dc"></div><div class="nm">Bone</div><div class="hex">#E7E4DC</div></div>
+        <div class="sw"><div class="chip" style="background:#0c0c0c"></div><div class="nm">Ink</div><div class="hex">#0C0C0C</div></div>
+        <div class="sw"><div class="chip" style="background:#e8ff2f"></div><div class="nm">Signal</div><div class="hex">#E8FF2F</div></div>
+        <div class="sw"><div class="chip" style="background:#777777"></div><div class="nm">Grey</div><div class="hex">#777777</div></div>
+      </div>
+      <div class="demos">
+        <div>
+          <p class="demo-cap">App — practice</p>
+          <div class="frame"><div class="pane">
+            <div class="grid-top"><span>Sight Reading</span><span>Line 07 / 30</span></div>
+            <svg class="staff diagram" viewBox="0 0 520 58" style="margin-top:18px" aria-label="staff">
+              <g stroke="#0c0c0c" stroke-width="1">
+                <line x1="2" y1="10" x2="518" y2="10"/><line x1="2" y1="21" x2="518" y2="21"/><line x1="2" y1="32" x2="518" y2="32"/><line x1="2" y1="43" x2="518" y2="43"/><line x1="2" y1="54" x2="518" y2="54"/>
+              </g>
+              <g fill="#0c0c0c">
+                <circle cx="120" cy="43" r="5"/><circle cx="170" cy="32" r="5"/><circle cx="220" cy="26" r="5"/>
+                <circle cx="320" cy="32" r="5"/><circle cx="370" cy="21" r="5"/><circle cx="430" cy="32" r="5"/>
+              </g>
+              <rect x="265" y="22" width="14" height="9" fill="#e8ff2f"/><circle cx="272" cy="38" r="5" fill="#0c0c0c"/>
+            </svg>
+            <div class="big">92<span class="u">%</span></div>
+            <div class="sub">C major · 5th position · ♩96 — pitch accuracy, first read.</div>
+            <div class="grid-bot">
+              <span class="play">▶ Play line</span>
+              <div style="text-align:right"><div class="m">Timing</div><div class="score">88<sup>%</sup></div></div>
+            </div>
+          </div></div>
+        </div>
+        <div>
+          <p class="demo-cap">Landing — hero</p>
+          <div class="frame"><div class="land">
+            <div class="kick"><span>Sight-reading · guitar</span><span>EST. 2026</span></div>
+            <h2>Read music.<br/>On the <span class="u">guitar.</span><br/>For real.</h2>
+            <div class="foot2">
+              <p>A daily reading practice that turns the page from obstacle into instrument.</p>
+              <button class="btn-go">Get early access →</button>
+            </div>
+          </div></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ D — PRACTICE TAPE ============ -->
+    <section class="dir D" id="D">
+      <span class="dir-id"><b>D</b> Concept</span>
+      <h2 class="dir-name">Practice Tape</h2>
+      <p class="dir-concept">A <em>musician's analog bench</em>: newsprint, riso duotone (flux orange × ultramarine), halftone grain, tape labels, and a real <em>VU meter</em> as your feedback needle. Warm, hand-made, lo-fi studio — the anti-slick. Feels like a 4-track and a practice journal had a baby.</p>
+      <div class="swatches">
+        <div class="sw"><div class="chip" style="background:#eae6db"></div><div class="nm">Newsprint</div><div class="hex">#EAE6DB</div></div>
+        <div class="sw"><div class="chip" style="background:#171515"></div><div class="nm">Ink</div><div class="hex">#171515</div></div>
+        <div class="sw"><div class="chip" style="background:#ff5b1f"></div><div class="nm">Flux</div><div class="hex">#FF5B1F</div></div>
+        <div class="sw"><div class="chip" style="background:#1d3df0"></div><div class="nm">Ultramarine</div><div class="hex">#1D3DF0</div></div>
+      </div>
+      <div class="demos">
+        <div>
+          <p class="demo-cap">App — practice</p>
+          <div class="frame"><div class="pane">
+            <div class="halftone"></div>
+            <div class="deck"><span class="label">★ SIGHT READING · take 7</span><span class="reel">REEL 03 · ♩96</span></div>
+            <div class="card">
+              <div class="stamp"><span>C MAJOR / POS.5</span><span><b>REC</b> ●</span></div>
+              <svg class="staff" viewBox="0 0 520 58" aria-label="staff">
+                <g stroke="#171515" stroke-width="1" opacity="0.85">
+                  <line x1="2" y1="10" x2="518" y2="10"/><line x1="2" y1="21" x2="518" y2="21"/><line x1="2" y1="32" x2="518" y2="32"/><line x1="2" y1="43" x2="518" y2="43"/><line x1="2" y1="54" x2="518" y2="54"/>
+                </g>
+                <text x="6" y="50" font-size="40" fill="#171515" font-family="serif">𝄞</text>
+                <g fill="#171515">
+                  <ellipse cx="130" cy="43" rx="6" ry="4.3"/><ellipse cx="180" cy="32" rx="6" ry="4.3"/>
+                  <ellipse cx="230" cy="26" rx="6" ry="4.3"/></g>
+                <ellipse cx="290" cy="32" rx="6" ry="4.3" fill="#ff5b1f"/>
+                <g fill="#171515"><ellipse cx="360" cy="21" rx="6" ry="4.3"/><ellipse cx="430" cy="32" rx="6" ry="4.3"/></g>
+              </svg>
+            </div>
+            <div class="vu">
+              <div class="scale"><span>-20</span><span>-10</span><span>-5</span><span>0</span><span style="color:#ff5b1f">+3</span></div>
+              <div class="bars">
+                <span class="b" style="height:30%"></span><span class="b" style="height:48%"></span><span class="b" style="height:40%"></span>
+                <span class="b" style="height:66%"></span><span class="b" style="height:54%"></span><span class="b" style="height:80%"></span>
+                <span class="b h" style="height:96%"></span><span class="b" style="height:60%"></span><span class="b" style="height:44%"></span><span class="b" style="height:34%"></span>
+              </div>
+              <span class="needle">PITCH 92 ▸</span>
+            </div>
+          </div></div>
+        </div>
+        <div>
+          <p class="demo-cap">Landing — hero</p>
+          <div class="frame"><div class="land">
+            <div class="halftone"></div>
+            <div class="inner">
+              <div class="kick">Side A · sight-reading for guitar</div>
+              <h2>Press record on<br/>your <mark>reading</mark> habit.</h2>
+              <p>Lay down a line a day. Watch the needle. Hear yourself get better — and have the takes to prove it.</p>
+              <div class="cta"><button class="btn-go">Get early access</button><button class="btn-li">▶ play the demo</button></div>
+            </div>
+          </div></div>
+        </div>
+      </div>
+    </section>
+
+    <p class="foot">
+      Pick a concept — <b>A Engraver's Plate</b>, <b>B Fretboard</b>, <b>C Signal</b>, or <b>D Practice Tape</b> — or splice them<br/>
+      (e.g. "<b>C's app + A's landing</b>", or "B but with C's restraint"). Then I build the full mockups for the screens you want.
+    </p>
+  </div>
+</body>
+</html>

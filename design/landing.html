@@ -1,0 +1,379 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sight Reading — practice reading music on your guitar</title>
+<link rel="stylesheet" href="./signal-tape.css" />
+<style>
+  /* ---- landing-specific layout ---- */
+  .nav {
+    position: sticky; top: 0; z-index: 40; background: rgba(236,231,218,.86);
+    backdrop-filter: blur(8px); border-bottom: 1.5px solid var(--ink);
+  }
+  .nav .row { max-width: var(--maxw); margin: 0 auto; padding: 13px 24px;
+    display: flex; align-items: center; gap: 22px; }
+  .nav .brand { font-family: var(--mono); font-weight: 500; font-size: 13px;
+    letter-spacing: .2em; text-transform: uppercase; }
+  .nav .brand .reg { margin-left: 4px; }
+  .nav .links { margin-left: auto; display: flex; gap: 22px; }
+  .nav .links a { font-family: var(--mono); font-size: 12px; letter-spacing: .04em;
+    text-decoration: none; color: var(--ink-2); }
+  .nav .links a:hover { color: var(--ink); text-decoration: underline; text-underline-offset: 4px; }
+  .nav .gh { font-family: var(--mono); font-size: 12px; border: 1.5px solid var(--ink);
+    padding: 6px 11px; text-decoration: none; }
+  .nav .gh:hover { background: var(--ink); color: var(--paper); }
+  @media (max-width: 720px){ .nav .links { display: none; } }
+
+  .section { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+  .rule-h { border: 0; border-top: 1.5px solid var(--ink); margin: 0; }
+
+  /* hero */
+  .hero { padding: 64px 0 30px; }
+  .hero .kick { display: flex; align-items: center; gap: 12px; }
+  .hero h1 { font-size: clamp(40px, 8vw, 86px); margin: 18px 0 0; max-width: 15ch; }
+  .hero .grid { display: grid; grid-template-columns: 1.35fr 1fr; gap: 34px; align-items: end; margin-top: 34px; }
+  @media (max-width: 820px){ .hero .grid { grid-template-columns: 1fr; gap: 26px; } }
+  .hero .lede { font-family: var(--mono); font-size: 14px; line-height: 1.8; color: var(--ink-2); max-width: 46ch; }
+  .hero .lede b { color: var(--ink); }
+
+  /* email gate */
+  .gate { }
+  .gate .gate-lbl { font-family: var(--mono); font-size: 11px; letter-spacing: .12em;
+    text-transform: uppercase; color: var(--ink-3); margin-bottom: 8px; }
+  .gate-form { display: flex; gap: 0; border: 1.5px solid var(--ink); background: var(--paper-2);
+    box-shadow: 5px 5px 0 var(--blue); }
+  .gate-form input { flex: 1; border: 0; background: transparent; padding: 15px 14px;
+    font-family: var(--mono); font-size: 14px; color: var(--ink); min-width: 0; }
+  .gate-form input:focus { outline: 0; background: #fff; }
+  .gate-form button { border: 0; border-left: 1.5px solid var(--ink); background: var(--ink);
+    color: var(--paper); font-family: var(--disp); font-weight: 900; font-size: 12px;
+    letter-spacing: .08em; text-transform: uppercase; padding: 0 18px; cursor: pointer; white-space: nowrap; }
+  .gate-form button:hover { background: var(--blue); }
+  .gate .fine { font-family: var(--mono); font-size: 11px; color: var(--ink-3); margin-top: 10px; }
+  .gate .fine a { color: var(--blue); }
+  /* success state */
+  .gate-done { display: none; border: 1.5px solid var(--ink); background: var(--paper-2);
+    box-shadow: 5px 5px 0 var(--flux); padding: 16px 18px; }
+  .gate.is-sent .gate-form { display: none; }
+  .gate.is-sent .gate-done { display: block; }
+  .gate.is-sent .fine.before { display: none; }
+  .gate-done .ok { font-family: var(--mono); font-size: 11px; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--ok); display: flex; align-items: center; gap: 7px; }
+  .gate-done .msg { margin: 8px 0 14px; font-size: 14px; }
+  .gate-done .msg b { background: var(--flux); color: #fff; padding: 0 4px; }
+  .gate-done .dl { display: flex; gap: 12px; flex-wrap: wrap; align-items: center; }
+  .gate-done .dl a.releases { font-family: var(--mono); font-size: 12px; color: var(--blue); text-decoration: none; }
+  .gate-done .dl a.releases:hover { text-decoration: underline; }
+
+  /* proof strip */
+  .proof { display: grid; grid-template-columns: repeat(3, 1fr); border-top: 1.5px solid var(--ink);
+    border-bottom: 1.5px solid var(--ink); margin-top: 40px; }
+  .proof .cell { padding: 20px 22px; border-right: 1px solid var(--line); }
+  .proof .cell:last-child { border-right: 0; }
+  .proof .k { font-family: var(--mono); font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--ink-3); }
+  .proof .n { font-weight: 900; font-size: 34px; letter-spacing: -0.03em; margin-top: 4px; }
+  .proof .n .arr { color: var(--flux); }
+
+  /* generic section header */
+  .sec { padding: 72px 0; }
+  .sec-id { display: flex; align-items: baseline; gap: 14px; }
+  .sec-id .num { font-family: var(--mono); font-size: 12px; color: var(--blue); }
+  .sec-id .lbl { font-family: var(--mono); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--ink-3); }
+  .sec h2 { font-size: clamp(30px, 5vw, 52px); margin: 14px 0 0; max-width: 18ch; }
+  .sec .body { font-family: var(--mono); font-size: 14px; line-height: 1.85; color: var(--ink-2); max-width: 56ch; margin-top: 18px; }
+
+  /* problem — pain list */
+  .pains { display: grid; grid-template-columns: repeat(3,1fr); gap: 0; margin-top: 36px;
+    border-top: 1.5px solid var(--ink); }
+  @media (max-width: 760px){ .pains { grid-template-columns: 1fr; } }
+  .pain { padding: 22px 20px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+  .pain:last-child { border-right: 0; }
+  .pain .q { font-family: var(--mono); font-size: 12px; color: var(--flux); }
+  .pain p { margin: 8px 0 0; font-size: 15px; }
+
+  /* how it works — steps */
+  .steps { display: grid; grid-template-columns: repeat(3,1fr); gap: 22px; margin-top: 40px; }
+  @media (max-width: 820px){ .steps { grid-template-columns: 1fr; } }
+  .step { border: 1.5px solid var(--ink); background: var(--paper-2); padding: 22px 20px; position: relative; }
+  .step .no { font-weight: 900; font-size: 54px; line-height: .8; letter-spacing: -0.04em; }
+  .step .no .pct { color: var(--blue); }
+  .step h3 { font-size: 19px; margin: 14px 0 8px; }
+  .step p { font-family: var(--mono); font-size: 12.5px; line-height: 1.7; color: var(--ink-2); margin: 0; }
+  .step .tag { position: absolute; top: -11px; right: 14px; background: var(--flux); color: #fff;
+    font-family: var(--mono); font-size: 10px; padding: 3px 8px; transform: rotate(-1.2deg); box-shadow: 2px 2px 0 var(--ink); }
+
+  /* proof / see the results — mini dashboard */
+  .dash { display: grid; grid-template-columns: 1.3fr 1fr; gap: 22px; margin-top: 40px; }
+  @media (max-width: 820px){ .dash { grid-template-columns: 1fr; } }
+  .panel { border: 1.5px solid var(--ink); background: var(--paper-2); padding: 18px; }
+  .panel .h { font-family: var(--mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+    color: var(--ink-3); display: flex; justify-content: space-between; margin-bottom: 14px; }
+  .trend { width: 100%; height: auto; }
+  .heat { display: grid; grid-template-columns: 46px repeat(6, 1fr); gap: 4px; font-family: var(--mono); font-size: 11px; }
+  .heat .hd { color: var(--ink-3); font-size: 9px; letter-spacing: .08em; align-self: center; }
+  .heat .lab { color: var(--ink-2); align-self: center; }
+  .heat .c { aspect-ratio: 1.7/1; display: grid; place-items: center; color: #fff; font-weight: 500; border-radius: 2px; }
+
+  /* download band */
+  .download { background: var(--ink); color: var(--paper); position: relative; overflow: hidden; }
+  .download .tex-half { opacity: .14; background-image: radial-gradient(var(--flux) 22%, transparent 23%); }
+  .download .inner { max-width: var(--maxw); margin: 0 auto; padding: 72px 24px; position: relative; z-index: 2; }
+  .download .eyebrow { color: var(--flux); }
+  .download h2 { font-size: clamp(32px, 6vw, 64px); margin: 14px 0 0; color: var(--paper); }
+  .download h2 .u { background: var(--flux); color: #fff; padding: 0 6px; }
+  .download .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 36px; align-items: center; margin-top: 30px; }
+  @media (max-width: 820px){ .download .grid { grid-template-columns: 1fr; } }
+  .download .lede { font-family: var(--mono); font-size: 14px; line-height: 1.8; color: #d9d4c8; max-width: 44ch; }
+  /* dark variant of the gate */
+  .download .gate-form { background: #1d1b18; border-color: var(--paper); box-shadow: 5px 5px 0 var(--flux); }
+  .download .gate-form input { color: var(--paper); }
+  .download .gate-form input::placeholder { color: #8a857a; }
+  .download .gate-form input:focus { background: #26231f; }
+  .download .gate-form button { background: var(--flux); color: #fff; border-left-color: var(--paper); }
+  .download .gate-form button:hover { background: var(--blue); }
+  .download .gate-lbl, .download .fine { color: #b6b1a5; }
+  .download .gate-done { background: #1d1b18; border-color: var(--paper); box-shadow: 5px 5px 0 var(--blue); }
+  .download .gate-done .msg { color: var(--paper); }
+  .download .platforms { display: flex; gap: 18px; margin-top: 16px; font-family: var(--mono); font-size: 12px; color: #b6b1a5; }
+
+  /* faq */
+  .faq { display: grid; grid-template-columns: 1fr 1fr; gap: 0; margin-top: 36px; border-top: 1.5px solid var(--ink); }
+  @media (max-width: 720px){ .faq { grid-template-columns: 1fr; } }
+  .qa { padding: 22px 20px; border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); }
+  .qa:nth-child(2n){ border-right: 0; }
+  .qa h4 { font-size: 16px; margin: 0 0 8px; }
+  .qa p { font-family: var(--mono); font-size: 12.5px; line-height: 1.7; color: var(--ink-2); margin: 0; }
+
+  /* footer */
+  footer { border-top: 1.5px solid var(--ink); }
+  footer .row { max-width: var(--maxw); margin: 0 auto; padding: 28px 24px; display: flex;
+    align-items: center; gap: 18px; flex-wrap: wrap; }
+  footer .brand { font-family: var(--mono); font-size: 12px; letter-spacing: .2em; text-transform: uppercase; }
+  footer .meta { margin-left: auto; font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+  footer .stamp { font-family: var(--mono); font-size: 10px; letter-spacing: .1em; border: 1.5px solid var(--ink);
+    padding: 5px 9px; transform: rotate(-1.5deg); }
+</style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="row">
+      <span class="brand">Sight Reading <span class="reg">✛</span></span>
+      <span class="links">
+        <a href="#problem">The problem</a>
+        <a href="#how">How it works</a>
+        <a href="#proof">The proof</a>
+        <a href="#get">Download</a>
+      </span>
+      <a class="gh" href="#get">GitHub ↗</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <header class="section hero pos">
+    <p class="kick reveal d1"><span class="reg">✛</span> A sight-reading gym for guitarists · <span class="mono">EST. 2026</span></p>
+    <h1 class="reveal d2">Reading music shouldn't feel like a <span class="u-flux">wall.</span></h1>
+
+    <div class="grid">
+      <p class="lede reveal d3">
+        You already play. But the dots on the page still freeze you — so you fall back to tab and the wall stays up.
+        <b>This turns reading into a five-minute daily habit:</b> a fresh line every day, instant note-by-note feedback,
+        and proof you're actually getting better.
+      </p>
+
+      <div class="gate reveal d4" data-gate>
+        <div class="gate-lbl">Get the demo</div>
+        <form class="gate-form" data-gate-form novalidate>
+          <input type="email" name="email" placeholder="you@guitar.com" autocomplete="email" required aria-label="Email address" />
+          <button type="submit">Email me the link</button>
+        </form>
+        <div class="gate-done" role="status" aria-live="polite">
+          <div class="ok">✓ Link on its way</div>
+          <div class="msg">Sent a download link to <b data-gate-email>you@guitar.com</b>. Or grab it now:</div>
+          <div class="dl">
+            <a class="btn btn-ink btn-sm" href="#" data-dl>↓ Download for macOS</a>
+            <a class="releases" href="#" >or all builds on GitHub Releases ↗</a>
+          </div>
+        </div>
+        <p class="fine before">macOS · Windows · ~5&nbsp;MB · early prototype · we'll only email about this. <a href="#get">Why email?</a></p>
+      </div>
+    </div>
+
+    <!-- proof strip -->
+    <div class="proof reveal d5">
+      <div class="cell"><div class="k">A reader's first 6 weeks</div><div class="n">54% <span class="arr">→</span> 91%</div></div>
+      <div class="cell"><div class="k">Lines read</div><div class="n">312</div></div>
+      <div class="cell"><div class="k">Day streak</div><div class="n">18
+        <svg width="118" height="20" viewBox="0 0 118 20" style="display:inline-block;vertical-align:middle;margin-left:8px">
+          <polyline fill="none" stroke="#1D3DF0" stroke-width="2" points="0,16 14,14 28,15 42,10 56,11 70,7 84,8 98,4 118,3"/>
+        </svg>
+      </div></div>
+    </div>
+    <div class="tex-half"></div>
+  </header>
+
+  <!-- PROBLEM -->
+  <section class="section sec" id="problem">
+    <div class="sec-id"><span class="num">01</span><span class="lbl">The problem</span></div>
+    <h2>Tab got you this far. The page is where you stall.</h2>
+    <p class="body">
+      Sight-reading is the skill every guitarist is told to build and almost nobody practices —
+      because the usual options are a paper method book with no feedback, or an app that wasn't
+      built for the fretboard. So you guess, you lose your place, and you quietly give up.
+    </p>
+    <div class="pains">
+      <div class="pain"><div class="q">No feedback</div><p>Paper can't tell you the note was a half-step flat or a beat late. You repeat mistakes without knowing.</p></div>
+      <div class="pain"><div class="q">No fresh material</div><p>You memorise the same ten exercises. Reading becomes recall — the opposite of sight-reading.</p></div>
+      <div class="pain"><div class="q">No proof</div><p>Without numbers, you can't tell a good week from a bad one. Progress feels invisible, so motivation dies.</p></div>
+    </div>
+  </section>
+
+  <hr class="rule-h" />
+
+  <!-- HOW -->
+  <section class="section sec" id="how">
+    <div class="sec-id"><span class="num">02</span><span class="lbl">How it works</span></div>
+    <h2>Practice it until it isn't hard.</h2>
+    <p class="body">Three moves, five minutes, every day. The app generates the music, listens to your guitar, and keeps score.</p>
+    <div class="steps">
+      <div class="step reveal d1">
+        <span class="tag">★ generated daily</span>
+        <div class="no">01</div>
+        <h3>Read a fresh line</h3>
+        <p>A new etude every time — in the key and fretboard position you're working on. Never memorised, always read.</p>
+      </div>
+      <div class="step reveal d2">
+        <div class="no">02</div>
+        <h3>Play it. Get scored.</h3>
+        <p>A count-in, a metronome, and pitch detection that catches every note — right, wrong, late, or missed — in real time as you play.</p>
+      </div>
+      <div class="step reveal d3">
+        <div class="no"><span class="pct">%</span></div>
+        <h3>See the results add up</h3>
+        <p>Pitch and timing accuracy, your weak notes, your streak. The wall turns into a graph that goes up.</p>
+      </div>
+    </div>
+  </section>
+
+  <hr class="rule-h" />
+
+  <!-- PROOF -->
+  <section class="section sec" id="proof">
+    <div class="sec-id"><span class="num">03</span><span class="lbl">The proof</span></div>
+    <h2>See the results.</h2>
+    <p class="body">Every take is saved, so the question stops being "do I feel better at this?" and becomes "is the line going up?" Here's what that looks like.</p>
+    <div class="dash">
+      <div class="panel reveal d1">
+        <div class="h"><span>Pitch accuracy · last 30 days</span><span class="u-blue">+37 pts</span></div>
+        <svg class="trend" viewBox="0 0 520 200" aria-label="accuracy trend">
+          <g stroke="#CFC8B6" stroke-width="1">
+            <line x1="34" y1="20" x2="510" y2="20"/><line x1="34" y1="65" x2="510" y2="65"/>
+            <line x1="34" y1="110" x2="510" y2="110"/><line x1="34" y1="155" x2="510" y2="155"/>
+          </g>
+          <g fill="#8A8478" font-family="DM Mono, monospace" font-size="9">
+            <text x="6" y="24">100</text><text x="14" y="114">70</text><text x="14" y="159">50</text>
+          </g>
+          <polygon fill="#1D3DF0" opacity="0.08"
+            points="34,150 90,140 146,144 202,120 258,112 314,92 370,84 426,58 482,40 482,170 34,170"/>
+          <polyline fill="none" stroke="#1D3DF0" stroke-width="2.5"
+            points="34,150 90,140 146,144 202,120 258,112 314,92 370,84 426,58 482,40"/>
+          <circle cx="482" cy="40" r="4" fill="#FF5B1F"/>
+          <text x="442" y="32" fill="#FF5B1F" font-family="DM Mono, monospace" font-size="10">91%</text>
+        </svg>
+      </div>
+      <div class="panel reveal d2">
+        <div class="h"><span>Weak spots · by note</span><span class="u-blue">drills here</span></div>
+        <div class="heat">
+          <span class="hd"></span><span class="hd">C</span><span class="hd">D</span><span class="hd">E</span><span class="hd">F♯</span><span class="hd">G</span><span class="hd">A</span>
+          <span class="lab">pos 5</span>
+          <span class="c" style="background:#1f8f5b">98</span><span class="c" style="background:#3a9b63">94</span>
+          <span class="c" style="background:#7a9a4e">86</span><span class="c" style="background:#FF5B1F">61</span>
+          <span class="c" style="background:#3a9b63">93</span><span class="c" style="background:#1f8f5b">97</span>
+          <span class="lab">pos 7</span>
+          <span class="c" style="background:#5a9a57">90</span><span class="c" style="background:#c2823a">74</span>
+          <span class="c" style="background:#1f8f5b">96</span><span class="c" style="background:#d96f2c">68</span>
+          <span class="c" style="background:#7a9a4e">85</span><span class="c" style="background:#3a9b63">92</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- DOWNLOAD / GATE -->
+  <section class="download pos" id="get">
+    <div class="tex-half"></div>
+    <div class="inner">
+      <p class="eyebrow">Download the prototype</p>
+      <h2>Try it on your <span class="u">own guitar.</span></h2>
+      <div class="grid">
+        <p class="lede">
+          The prototype is free and runs on your machine. Drop your email and we'll send a download link —
+          that's how we know which guitarists to build the full thing for. Prefer no email? The builds are on GitHub Releases.
+        </p>
+        <div class="gate" data-gate>
+          <div class="gate-lbl">Email me the demo</div>
+          <form class="gate-form" data-gate-form novalidate>
+            <input type="email" name="email" placeholder="you@guitar.com" autocomplete="email" required aria-label="Email address" />
+            <button type="submit">Send the link</button>
+          </form>
+          <div class="gate-done" role="status" aria-live="polite">
+            <div class="ok">✓ Check your inbox</div>
+            <div class="msg">Download link sent to <b data-gate-email>you@guitar.com</b>.</div>
+            <div class="dl">
+              <a class="btn btn-blue btn-sm" href="#" data-dl>↓ Download now</a>
+              <a class="releases" href="#" style="color:#9fb0ff">GitHub Releases ↗</a>
+            </div>
+          </div>
+          <div class="platforms">
+            <span>◆ macOS (Apple&nbsp;Silicon + Intel)</span><span>◆ Windows</span><span>◆ ~5&nbsp;MB</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <section class="section sec" id="faq">
+    <div class="sec-id"><span class="num">04</span><span class="lbl">Questions</span></div>
+    <h2>The short version.</h2>
+    <div class="faq">
+      <div class="qa"><h4>Is it free?</h4><p>Yes — the prototype is free to download and use. We're validating whether guitarists want this before building the full native app.</p></div>
+      <div class="qa"><h4>Why ask for my email?</h4><p>It's the whole point of the test: it tells us how many players actually want this, and lets us send you the next build. We won't sell it or spam you.</p></div>
+      <div class="qa"><h4>Do I need special gear?</h4><p>Just your guitar and your computer's mic (an audio interface is better). Headphones recommended so the metronome doesn't bleed into detection.</p></div>
+      <div class="qa"><h4>How early is "early"?</h4><p>Very. It's a working prototype to prove the idea — rough edges included. Your feedback shapes what the real version becomes.</p></div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer class="pos tex-grain">
+    <div class="row z">
+      <span class="brand">Sight Reading ✛</span>
+      <span class="stamp">TEST PRESSING · 2026</span>
+      <span class="meta">Built by webeleon · <a href="#get" style="color:var(--blue)">GitHub ↗</a> · © 2026</span>
+    </div>
+  </footer>
+
+  <script>
+    // Email-gated download — demonstrates the real UX states (no backend here).
+    // The live site will POST this to a Next.js route on Vercel that records the
+    // email and returns/sends the GitHub Releases download link.
+    document.querySelectorAll('[data-gate]').forEach(function (gate) {
+      var form = gate.querySelector('[data-gate-form]');
+      if (!form) return;
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        var input = form.querySelector('input[type=email]');
+        var value = (input && input.value || '').trim();
+        if (!value || value.indexOf('@') === -1) {
+          if (input) { input.focus(); input.style.background = '#fff0ec'; }
+          return;
+        }
+        var slot = gate.querySelector('[data-gate-email]');
+        if (slot) slot.textContent = value;
+        gate.classList.add('is-sent');
+      });
+    });
+  </script>
+</body>
+</html>
