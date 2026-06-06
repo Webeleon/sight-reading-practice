@@ -29,3 +29,13 @@ export const RELEASES_FALLBACK_URL =
 export function getReleasesUrl(): string {
   return process.env.NEXT_PUBLIC_RELEASES_URL || RELEASES_FALLBACK_URL;
 }
+
+/** The repository home (for the nav/footer "GitHub ↗" links) — same slug as the
+ *  releases URL, so it tracks the single source of truth. Override with
+ *  NEXT_PUBLIC_REPO_URL when the canonical slug is confirmed. */
+export const REPO_FALLBACK_URL =
+  "https://github.com/webeleon/sight-reading-guitar-practice";
+
+export function getRepoUrl(): string {
+  return process.env.NEXT_PUBLIC_REPO_URL || REPO_FALLBACK_URL;
+}

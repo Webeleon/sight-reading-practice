@@ -665,28 +665,14 @@ export function App(): React.JSX.Element {
       <style>{SHELL_CSS}</style>
 
       <div className="app-window">
-        {/* halftone dot-screen texture over the window (design screen 02
+        {/* halftone dot-screen texture over the whole window (design
             <div class="tex-half">); content below lifts above it via .z. */}
         <div className="tex-half" aria-hidden="true" />
 
-        {/* window chrome bar (design .win-bar) */}
-        <div className="win-bar z">
-          <span className="app-id">
-            SIGHT <b>READING</b>.app
-          </span>
-          <span className="win-ctl">
-            <span className={'sq' + (isLive ? ' live' : '')} />
-            {isLive ? 'recording' : 'ready'}
-            <span className="sq" />
-            <span className="sq" />
-            <span className="sq" />
-          </span>
-        </div>
-
         {/* First-run onboarding hero (design screen 01). Shown until the
-            persisted onboardingComplete flag is set; the win-bar stays, but the
-            topbar/view-switch and the practice/stats stages are withheld so the
-            screen is the distinct setup hero the design opens on. */}
+            persisted onboardingComplete flag is set; the topbar/view-switch and
+            the practice/stats stages are withheld so the screen is the distinct
+            setup hero the design opens on. */}
         {onboarded === false && (
           <div className="stage z onboarding-stage">
             <OnboardingView
@@ -759,63 +745,26 @@ export function App(): React.JSX.Element {
 // Kept here because this file is the sole owned surface; CSP allows inline styles.
 // -----------------------------------------------------------------------------
 const SHELL_CSS = `
-  /* app-window frame (design .win) */
+  /* The renderer window IS the app: fill it edge-to-edge — no faux window
+     chrome, border, card frame, or crop-marks. The bone canvas + halftone
+     dot-screen span the entire viewport; content scrolls naturally. */
   .app-window {
-    border: 1.5px solid var(--ink);
     background: var(--paper);
-    box-shadow: 0 26px 64px rgba(0, 0, 0, 0.28);
-    overflow: hidden;
     position: relative;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
   }
-  /* crop-marks — frame the SHEET (the .app-window box), not the viewport (design
-     .crops). Absolutely positioned on the relative window so they register the
-     window box and travel with it on scroll. z:3 lifts them above the halftone
-     texture (z:1) and content (z:2). */
-  .app-window::before,
-  .app-window::after {
-    content: "";
-    position: absolute;
-    width: 14px;
-    height: 14px;
-    pointer-events: none;
-    z-index: 3;
-  }
-  .app-window::before {
-    left: 10px;
-    top: 10px;
-    border-left: 1.5px solid var(--ink);
-    border-top: 1.5px solid var(--ink);
-  }
-  .app-window::after {
-    right: 10px;
-    bottom: 10px;
-    border-right: 1.5px solid var(--ink);
-    border-bottom: 1.5px solid var(--ink);
-  }
-  /* the halftone dot-screen layer (design screen 02 <div class="tex-half">),
-     absolutely filling the window beneath the content (.z lifts content above). */
+  /* the halftone dot-screen layer fills the whole window beneath the content
+     (.z lifts content above it). */
   .app-window .tex-half { z-index: 1; }
-  .win-bar {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 9px 14px; border-bottom: 1.5px solid var(--ink); background: var(--paper-3);
-  }
-  .win-bar .app-id { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; }
-  .win-bar .app-id b { color: var(--blue); }
-  .win-bar .win-ctl {
-    display: flex; gap: 7px; align-items: center;
-    font-family: var(--mono); color: var(--ink-2); font-size: 12px;
-  }
-  .win-bar .win-ctl .sq {
-    width: 10px; height: 10px; border: 1.5px solid var(--ink); display: inline-block;
-  }
-  .win-bar .win-ctl .sq.live { background: var(--flux); border-color: var(--flux); border-radius: 50%; }
 
-  /* topbar: brand + meta in DM Mono (design .topbar) — reuses .app-header from
-     styles.css for the bottom rule/accent, but we restate the layout here. */
+  /* topbar: brand + meta in DM Mono (design .topbar), full-bleed across the
+     window; the accent-rule div below it draws the structural ultramarine line. */
   .app-header.topbar {
     align-items: center;
-    padding: 14px 22px 12px;
-    border-bottom: none;            /* the accent-rule div draws the structure line */
+    padding: 18px 34px 14px;
+    border-bottom: none;
     margin: 0;
   }
   .app-header.topbar::after { display: none; }   /* use the explicit accent-rule div */
@@ -835,7 +784,7 @@ const SHELL_CSS = `
   /* the working stage inside the window */
   .stage {
     display: flex; flex-direction: column; gap: 18px;
-    padding: 22px 22px 24px;
+    padding: 24px 34px 40px;
   }
   /* the [hidden] HTML attribute must still win over the flex display above so a
      view switch truly collapses the inactive stage (practice stays MOUNTED but

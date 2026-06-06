@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Sight Reading">
+  <rect width="32" height="32" fill="#141210"/>
+  <g stroke="#4A463F" stroke-width="1.1">
+    <line x1="5" y1="11" x2="27" y2="11"/>
+    <line x1="5" y1="16" x2="27" y2="16"/>
+    <line x1="5" y1="21" x2="27" y2="21"/>
+  </g>
+  <rect x="18.4" y="8.5" width="2" height="12" fill="#1D3DF0"/>
+  <ellipse cx="13.6" cy="20" rx="5.1" ry="3.7" fill="#FF5B1F"/>
+</svg>

@@ -91,14 +91,15 @@ function pitchErrorText(row: ReviewRow): string {
 }
 
 /** Map a classification to the SAME feedback colour family as the staff. `late`
- *  reads as the hit (green) colour because the pitch was right — its fault is the
- *  timing column. */
+ *  gets the design's amber (right pitch, wrong timing) so it reads distinctly
+ *  from a clean hit. */
+const LATE_AMBER = '#c2823a'; // design --warn (matches the .chip-late chip)
 function classColor(classification: ReviewRow['classification']): string {
   switch (classification) {
     case 'hit':
       return FEEDBACK_COLORS.hit;
     case 'late':
-      return FEEDBACK_COLORS.hit;
+      return LATE_AMBER;
     case 'wrong_pitch':
       return FEEDBACK_COLORS.wrong;
     case 'missed':

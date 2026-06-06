@@ -18,8 +18,9 @@ export function Hero() {
         <p className={`${styles.lede} reveal d3`}>
           You already play. But the dots on the page still freeze you — so you
           fall back to tab and the wall stays up.{" "}
-          <b>This turns reading into a five-minute daily habit:</b> a fresh line
-          every day, instant note-by-note feedback, and proof you&apos;re
+          <b>This turns reading into a five-minute daily habit:</b>{" "}
+          a fresh line every day, instant note-by-note feedback, and proof
+          you&apos;re
           actually getting better.
         </p>
 

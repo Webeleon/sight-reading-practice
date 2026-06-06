@@ -216,25 +216,22 @@ body::after {
 
 /* ----------------------------------------------------------------------------
    APP SHELL  (App.tsx: <main class="app-shell read-along">)
-   The renderer window IS the "win" chrome from the design — we frame the whole
-   sheet on the bone canvas with crop-marks + an accent rule.
+   The renderer window IS the app — fill it edge-to-edge (no centred card / max
+   width). The bone canvas spans the whole viewport; .app-window (App.tsx) is the
+   full-height flex column that holds the topbar, accent rule and the stage.
 ---------------------------------------------------------------------------- */
 .app-shell {
-  max-width: 1040px;
-  margin: 0 auto;
-  padding: 32px 24px 96px;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
 }
 
 .read-along {
   display: flex;
   flex-direction: column;
-  gap: 18px;
 }
-
-/* crop-marks — the recurring print / record-sleeve motif (design .crops). These
-   frame the bordered SHEET (the .app-window artboard), NOT the browser viewport,
-   so they register the window box and travel with it on scroll. The corners are
-   drawn by .app-window::before/::after below (it is position:relative). */
 
 /* ---- header / topbar (App.tsx: app-header, subtitle, env-line, view-switch) - */
 .app-header {
@@ -823,53 +820,8 @@ body::after {
   color: var(--ink-3);
 }
 
-/* ----------------------------------------------------------------------------
-   TIMING READOUT  (TimingReadout.tsx — evidence panel; phase-* + dev pass/fail)
----------------------------------------------------------------------------- */
-.timing-readout {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 8px 24px;
-  padding: 14px 18px;
-  background: var(--paper-2);
-  border: 1.5px solid var(--ink);
-  border-radius: var(--r);
-  font-family: var(--mono);
-  font-size: 13px;
-}
-
-.readout-row {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-.readout-label {
-  color: var(--ink-3);
-}
-.readout-value {
-  font-weight: 500;
-  color: var(--ink);
-}
-
-.phase-idle {
-  color: var(--ink-3);
-}
-.phase-countIn {
-  color: var(--flux);
-}
-.phase-playing {
-  color: var(--blue);
-}
-.phase-finished {
-  color: var(--ok);
-}
-
-.dev-pass {
-  color: var(--ok);
-}
-.dev-fail {
-  color: var(--flux);
-}
+/* (TimingReadout styles removed — the dead TimingReadout.tsx component was
+   deleted in the polish pass; it was imported nowhere.) */
 
 /* ----------------------------------------------------------------------------
    RESULTS SCREEN  (ResultsScreen.tsx — design .res block)

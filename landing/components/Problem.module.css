@@ -21,7 +21,7 @@
 .pain .q {
   font-family: var(--mono);
   font-size: 12px;
-  color: var(--flux);
+  color: var(--flux-ink);
 }
 .pain p {
   margin: 8px 0 0;

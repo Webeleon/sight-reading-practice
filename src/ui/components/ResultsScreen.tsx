@@ -102,9 +102,11 @@ export function ResultsScreen({
   onRetryAtTempo,
   onRetrySlower,
 }: ResultsScreenProps): React.JSX.Element {
-  // Detection-detail panel is collapsed by default (the results metrics are the
-  // primary read; the per-note review is opt-in for accuracy validation at Gate 3).
-  const [showDetail, setShowDetail] = useState(false);
+  // Detection detail (per-note table + pitch-vs-time graph) is part of the
+  // results BODY by default — it matches the design's results screen ("see the
+  // results") rather than being buried behind a toggle. The toggle stays so it
+  // can still be collapsed.
+  const [showDetail, setShowDetail] = useState(true);
 
   const pitchPct = pctNum(result.pitchAccuracy);
   const timingPct = pctNum(result.timingAccuracy);

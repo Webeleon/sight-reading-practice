@@ -24,7 +24,8 @@
   --line:    #CFC8B6;   /* hairline rules          */
   --blue:    #1D3DF0;   /* ultramarine — structure */
   --blue-d:  #142BB0;
-  --flux:    #FF5B1F;   /* flux orange — live/feedback */
+  --flux:    #FF5B1F;   /* flux orange — live/feedback (fills, on dark) */
+  --flux-ink:#B23A12;   /* darker flux for TEXT on the bone canvas (WCAG AA) */
   --ok:      #1f8f5b;   /* in-tune / correct (used sparingly) */
 
   /* next/font families with the original stacks as fallbacks */
