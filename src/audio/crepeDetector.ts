@@ -38,7 +38,7 @@
 // node-unit-testable without a DOM; this class is the Web-Audio plumbing around it.
 
 import * as tf from '@tensorflow/tfjs';
-import { frequencyToMidi } from './pitchMath.js';
+import { frequencyToMidi, rmsLevel } from './pitchMath.js';
 import {
   OnsetSegmenter,
   DEFAULT_SEGMENTER_CONFIG,
@@ -237,6 +237,10 @@ export class CrepeDetector {
     if (!model) return;
 
     this.analyser.getFloatTimeDomainData(this.buffer);
+
+    // Read-only VU readout off the SAME raw (pre-resample, pre-normalize) buffer.
+    // Does not alter detection: resampleLinear reads the untouched buffer below.
+    if (this.opts.onLevel) this.opts.onLevel(rmsLevel(this.buffer));
 
     // Resample the device-rate window down to a 1024-sample 16kHz CREPE frame,
     // then per-frame normalize (subtract mean / divide by std).

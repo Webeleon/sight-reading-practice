@@ -13,6 +13,10 @@ export interface AppConfig {
    *  choice survives across runs. Kept as a plain string union here to avoid the
    *  appConfig module depending on the audio layer's DetectorKind type. */
   detector?: 'pitchy' | 'crepe';
+  /** Whether the first-run onboarding/setup screen has been completed (the user
+   *  pressed "Start practicing" or skipped). When unset/false the app opens on
+   *  the onboarding hero instead of mounting straight into practice. */
+  onboardingComplete?: boolean;
 }
 
 interface ConfigBridge {

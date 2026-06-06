@@ -30,13 +30,19 @@ import { serializeLineToMusicXML } from '../../musicxml/serialize.js';
  * Notehead colours for the three real-time feedback states (brief section 13):
  * strong, unambiguous, readable at a distance. Exposed as named constants so the
  * human can recolor without hunting through logic.
+ *
+ * Recoloured to the "Signal Tape" palette (design/signal-tape.css two-colour
+ * discipline): ink is the engraved default, ULTRAMARINE marks a correct hit
+ * (structure/data), FLUX ORANGE marks a wrong note (energy/feedback — the same
+ * orange used for the live note + cursor), and faded ink greys out a miss.
+ * Only the colour VALUES change here; the feedback states + logic are untouched.
  */
 export const FEEDBACK_COLORS = {
-  hit: '#1faa59', // green: correct pitch in time
-  wrong: '#e03131', // red: something at the right time, wrong pitch
-  missed: '#9aa0a6', // dim grey: nothing detected
+  hit: '#1d3df0', // ultramarine: correct pitch in time
+  wrong: '#ff5b1f', // flux orange: something at the right time, wrong pitch
+  missed: '#8a8478', // faded ink: nothing detected
   /** Default (un-evaluated) notehead colour OSMD uses. */
-  neutral: '#000000',
+  neutral: '#141210', // ink: the engraved default
 } as const;
 
 /** Feedback colour key for a single note (or null to leave it neutral). */
@@ -114,8 +120,10 @@ export const OsmdView = forwardRef<CursorHandle, OsmdViewProps>(
         drawPartNames: false,
         followCursor: true,
         // A bold, unambiguous cursor that reads at a distance (brief section 13).
+        // Signal Tape: FLUX ORANGE marks the live/current note (the same colour as
+        // the design's .cursor + .note.is-live). Colour only — behaviour unchanged.
         cursorsOptions: [
-          { type: 0, color: '#4f9cff', alpha: 0.45, follow: true },
+          { type: 0, color: '#ff5b1f', alpha: 0.28, follow: true },
         ],
       });
       osmdRef.current = osmd;

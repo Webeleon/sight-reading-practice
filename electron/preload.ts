@@ -20,6 +20,8 @@ export interface AppConfig {
   headphoneTipDismissed?: boolean;
   /** Selected pitch detector ('pitchy' default | 'crepe'), persisted for A/B. */
   detector?: 'pitchy' | 'crepe';
+  /** Whether the first-run onboarding/setup screen has been completed. */
+  onboardingComplete?: boolean;
 }
 
 /** Filter bag passed to the stats queries; mirrors AccuracyFilter/HeatmapFilter

@@ -70,6 +70,15 @@ export interface DetectionFrame {
  */
 export const RECORDING_MIME_TYPE = 'audio/webm;codecs=opus';
 
+/**
+ * Exponential-smoothing factor for the input-level (VU) signal, in (0,1]. Each
+ * frame the smoothed level moves this fraction of the way toward the new raw RMS,
+ * so a fast attack still reads quickly while gaps between notes don't make the
+ * meter flicker. ~0.3 at rAF cadence is a responsive-but-stable meter. This only
+ * affects the cosmetic level readout — never detection.
+ */
+export const INPUT_LEVEL_SMOOTHING = 0.3;
+
 /** A selectable audio input device (from enumerateDevices). */
 export interface AudioInputDevice {
   deviceId: string;
@@ -170,6 +179,13 @@ export class AudioGraph {
   private sourceNode: MediaStreamAudioSourceNode | null = null;
   private detector: RunnableDetector | null = null;
   private running = false;
+  /**
+   * Smoothed input RMS in [0,1] for the VU meter. Updated each analysis frame from
+   * the detector's onLevel callback while a take runs; reset to 0 on stop so an
+   * idle graph reads silence. Purely cosmetic — derived read-only from the same
+   * buffer the detector analyses, so it never influences detection.
+   */
+  private inputLevel = 0;
   /** The detector kind ACTUALLY running after start() (may differ from the
    *  requested kind when a CREPE model-load failure forced a pitchy fallback). */
   private activeDetectorKind: DetectorKind = DEFAULT_DETECTOR_KIND;
@@ -207,6 +223,15 @@ export class AudioGraph {
    */
   getActiveDetectorKind(): DetectorKind {
     return this.activeDetectorKind;
+  }
+
+  /**
+   * The current smoothed input level in [0,1] (RMS of the live mic frame) for the
+   * VU meter. Reads 0 when no take is running (idle / stopped) and 0 on a silent
+   * input. Poll this each animation frame while a take runs. Cosmetic only.
+   */
+  getInputLevel(): number {
+    return this.running ? this.inputLevel : 0;
   }
 
   /**
@@ -267,6 +292,7 @@ export class AudioGraph {
     this.frames = [];
     this.recordedChunks = [];
     this.recordingMimeType = '';
+    this.inputLevel = 0; // start each take at silence; the meter rises with input
     const captureFrames = this.opts.captureFrames !== false; // default ON
     const record = this.opts.record !== false; // default ON
 
@@ -301,12 +327,19 @@ export class AudioGraph {
       this.opts.onSample?.(event);
     };
 
+    // Smooth the per-frame raw RMS into the cosmetic VU level. Read-only over the
+    // detector's analysed buffer — never feeds back into detection.
+    const onLevel: PitchDetectorOptions['onLevel'] = (raw: number) => {
+      this.inputLevel += (raw - this.inputLevel) * INPUT_LEVEL_SMOOTHING;
+    };
+
     const detectorOpts: PitchDetectorOptions = {
       context: this.ctx,
       source: this.sourceNode,
       audioTimeToScheduleMs: mapper,
       onSample,
       onNote: this.opts.onNote,
+      onLevel,
     };
 
     const requested = this.opts.detector ?? DEFAULT_DETECTOR_KIND;
@@ -432,6 +465,7 @@ export class AudioGraph {
   stop(): void {
     if (!this.running && !this.stream) return;
     this.running = false;
+    this.inputLevel = 0; // idle graph reads silence
     this.finishRecorder();
     this.detector?.stop();
     this.detector = null;

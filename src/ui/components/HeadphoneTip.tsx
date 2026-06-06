@@ -5,6 +5,11 @@
 // headphones improve detection (playing through speakers lets the metronome/
 // playback bleed into the mic and pollute pitch detection). Dismissal is
 // persisted so it only shows once.
+//
+// PRESENTATION ONLY: matches the Signal Tape advisory tip from design/app.html
+// screen 01 (the dashed .onb .tip row with a headphone glyph). Behaviour is
+// unchanged — same show / dismiss / persistence. Uses the existing .headphone-tip
+// styles.css class (dashed advisory); the glyph + layout are local markup.
 
 import React, { useCallback, useEffect, useState } from 'react';
 import { getAppConfig, setAppConfig } from '../appConfig.js';
@@ -33,11 +38,17 @@ export function HeadphoneTip(): React.JSX.Element | null {
 
   return (
     <div className="headphone-tip" role="note">
-      <span>
-        Tip: use headphones. Playing through speakers lets the metronome and
-        background sound bleed into the mic and hurts pitch detection.
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 12 }}>
+        <span aria-hidden="true" style={{ fontSize: 16, lineHeight: 1 }}>
+          🎧
+        </span>
+        <span>
+          Use headphones so the metronome doesn&rsquo;t leak into the mic.
+          Playing through speakers lets background sound bleed in and hurts pitch
+          detection — it keeps your scores honest.
+        </span>
       </span>
-      <button className="btn btn-small" onClick={dismiss}>
+      <button type="button" className="btn btn-small" onClick={dismiss}>
         Got it
       </button>
     </div>

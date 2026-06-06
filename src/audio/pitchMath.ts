@@ -79,6 +79,28 @@ export function isInGuitarRange(midi: number): boolean {
 }
 
 /**
+ * Root-mean-square amplitude of a time-domain sample buffer, in [0,1] for input
+ * samples already in [-1,1] (which is exactly what AnalyserNode.getFloatTimeDomainData
+ * fills). PURE: this is what backs the VU meter's input-level signal. It is read-only
+ * over the SAME buffer the detector already fills each frame, so computing it cannot
+ * change any detection result. An empty buffer reads as 0 (silence).
+ *
+ * Returns a raw (unsmoothed) RMS; the caller applies any temporal smoothing. A
+ * silent buffer (all zeros — e.g. the fake AnalyserNode in audioGraph.dom.test.ts)
+ * yields exactly 0.
+ */
+export function rmsLevel(buffer: ArrayLike<number>): number {
+  const n = buffer.length;
+  if (n === 0) return 0;
+  let sumSquares = 0;
+  for (let i = 0; i < n; i++) {
+    const s = buffer[i]!;
+    sumSquares += s * s;
+  }
+  return Math.sqrt(sumSquares / n);
+}
+
+/**
  * Clarity gating predicate. A raw detection is trustworthy iff its clarity meets
  * the threshold AND it produced a usable in-range MIDI value. This is the single
  * gate the live detector and the tests share, so "what counts as a real note"

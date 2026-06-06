@@ -38,8 +38,44 @@ export interface ResultsScreenProps {
   onRetrySlower: () => void;
 }
 
-function pct(x: number): string {
-  return `${Math.round(x * 100)}%`;
+/** retry_slower tempo factor — MUST mirror App.tsx's RETRY_SLOWER_FACTOR so the
+ *  button label previews the exact tempo the orchestrator will run. Presentational
+ *  only (label text); the actual tempo shift lives in onRetrySlower's owner. */
+const RETRY_SLOWER_FACTOR = 0.7;
+
+/** Whole-percent integer (for the <sup>%</sup> split + the progress-bar width). */
+function pctNum(x: number): number {
+  return Math.round(x * 100);
+}
+
+/* Inline geometry for the big-metric progress bar (design .bigmetric .bar /
+   .bigmetric .bar i). Kept inline because the bar is presentational and styles.css
+   is not owned by this component; colours reference the Signal Tape tokens so they
+   stay in palette. The fill width is the data (the %). */
+const METRIC_BAR_TRACK: React.CSSProperties = {
+  height: 6,
+  background: 'var(--paper-3)',
+  marginTop: 14,
+  borderRadius: 2,
+  overflow: 'hidden',
+};
+const METRIC_SUP: React.CSSProperties = { fontSize: 22 };
+
+/** The slower retry tempo previewed on the button (mirrors App.tsx exactly). */
+function slowerTempo(tempo: number): number {
+  return Math.max(30, Math.round(tempo * RETRY_SLOWER_FACTOR));
+}
+
+/** attempt_type -> the short take label shown in the results attribution line. */
+function attemptLabel(attemptType: AttemptType): string {
+  switch (attemptType) {
+    case 'first_read':
+      return 'FIRST READ';
+    case 'retry_at_tempo':
+      return 'RETRY · AT TEMPO';
+    case 'retry_slower':
+      return 'RETRY · SLOWER';
+  }
 }
 
 function keyLabel(line: Line): string {
@@ -70,30 +106,68 @@ export function ResultsScreen({
   // primary read; the per-note review is opt-in for accuracy validation at Gate 3).
   const [showDetail, setShowDetail] = useState(false);
 
+  const pitchPct = pctNum(result.pitchAccuracy);
+  const timingPct = pctNum(result.timingAccuracy);
+
   return (
     <div className="results-screen">
       <div className="results-header">
-        <h2>Results</h2>
-        <span className="results-attempt">attempt: {attemptType}</span>
+        <h2>Take complete.</h2>
+        {/* Data-driven attribution line (design: "LINE 07 · FIRST READ · C MAJOR
+            · POS.5 · ♩96") — built from the Line + attempt_type we actually ran. */}
+        <span className="results-attempt">
+          {attemptLabel(attemptType)} · {keyLabel(line).toUpperCase()} ·{' '}
+          {(line.position.label ?? 'POS').toUpperCase()} · {line.barCount} BARS ·{' '}
+          ♩{line.tempo}
+        </span>
       </div>
 
+      {/* Big metric blocks with progress bars (design .bigmetric). The bar fill
+          width is the only inline style — it is data (the %), exactly as the mock
+          drives it. pitch=ultramarine, timing=flux. */}
       <div className="results-metrics">
         <div className="metric metric-pitch">
-          <div className="metric-value">{pct(result.pitchAccuracy)}</div>
+          <div className="metric-value">
+            {pitchPct}
+            <sup style={METRIC_SUP}>%</sup>
+          </div>
           <div className="metric-label">Pitch accuracy</div>
           <div className="metric-sub">
             (hits + late) / {result.totalExpectedNotes}
           </div>
+          <div className="metric-bar" style={METRIC_BAR_TRACK}>
+            <i
+              style={{
+                display: 'block',
+                height: '100%',
+                width: `${pitchPct}%`,
+                background: 'var(--blue)',
+              }}
+            />
+          </div>
         </div>
         <div className="metric metric-timing">
-          <div className="metric-value">{pct(result.timingAccuracy)}</div>
+          <div className="metric-value">
+            {timingPct}
+            <sup style={METRIC_SUP}>%</sup>
+          </div>
           <div className="metric-label">Timing accuracy</div>
-          <div className="metric-sub">
-            hits / {result.totalExpectedNotes}
+          <div className="metric-sub">hits / {result.totalExpectedNotes}</div>
+          <div className="metric-bar" style={METRIC_BAR_TRACK}>
+            <i
+              style={{
+                display: 'block',
+                height: '100%',
+                width: `${timingPct}%`,
+                background: 'var(--flux)',
+              }}
+            />
           </div>
         </div>
       </div>
 
+      {/* Classification chips (design .ch family): blue / flux / amber / grey /
+          outline. */}
       <div className="results-breakdown">
         <span className="chip chip-hit">{result.hits} hit</span>
         <span className="chip chip-wrong">{result.wrongPitch} wrong</span>
@@ -133,7 +207,7 @@ export function ResultsScreen({
           onClick={onRetrySlower}
           title="Re-read this line slower (excluded from fluency stats)"
         >
-          Retry slower
+          Retry slower ({slowerTempo(line.tempo)} bpm)
         </button>
         {review && (
           <button

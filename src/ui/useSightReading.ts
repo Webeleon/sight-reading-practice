@@ -117,6 +117,15 @@ export interface UseSightReading {
   activeDetector: DetectorKind | null;
   /** Live count of detected notes so far (for an on-screen readout). */
   detectedCount: number;
+  /**
+   * Smoothed live input level in [0,1] (RMS of the mic frame) for the Practice
+   * screen's VU meter. Updates each frame while a LIVE take runs; 0 otherwise
+   * (idle, finished, or a synthetic take, which has no mic). Cosmetic only — it
+   * is derived read-only from the same buffer the detector analyses and never
+   * affects detection, scheduling, or evaluation. The UI may treat 0 while not
+   * running as "not listening" and fall back to a CSS-animated meter.
+   */
+  inputLevel: number;
   /** 1-based current count-in beat while phase==='countIn' (0 when not counting
    *  in). Drives the on-screen count-in indicator. */
   countInBeat: number;
@@ -165,6 +174,7 @@ export function useSightReading(
   const [attemptType, setAttemptType] = useState<AttemptType>('first_read');
   const [activeDetector, setActiveDetector] = useState<DetectorKind | null>(null);
   const [detectedCount, setDetectedCount] = useState(0);
+  const [inputLevel, setInputLevel] = useState(0);
   const [countInBeat, setCountInBeat] = useState(0);
   const [countInTotalBeats, setCountInTotalBeats] = useState(0);
 
@@ -199,6 +209,7 @@ export function useSightReading(
     graphRef.current = null;
     setIsRunning(false);
     setCountInBeat(0);
+    setInputLevel(0);
     setActiveDetector(null);
     activeDetectorRef.current = null;
   }, []);
@@ -240,6 +251,7 @@ export function useSightReading(
       setResult(null);
       setReview(null);
       setDetectedCount(0);
+      setInputLevel(0);
       // Count-in indicator: total beats across the count-in bars.
       const totalCountInBeats = countInBars * runLine.timeSignature.beats;
       setCountInTotalBeats(totalCountInBeats);
@@ -310,6 +322,11 @@ export function useSightReading(
         const elapsedMs = m.elapsedMs();
         const inCountIn = elapsedMs < sched.countInOffsetMs;
 
+        // Cosmetic VU level: poll the live graph's smoothed input RMS each frame
+        // (0 in synthetic mode, which has no graph). Read-only; never affects the
+        // detection/scheduling above.
+        setInputLevel(graphRef.current?.getInputLevel() ?? 0);
+
         // Count-in visual: the 1-based current beat, derived from elapsed time and
         // the per-beat duration (countInOffsetMs / totalBeats). Clamp to [1,total].
         if (inCountIn && totalCountInBeats > 0) {
@@ -377,6 +394,7 @@ export function useSightReading(
           metronomeRef.current = null;
           finalizeEvaluation(graph);
           setIsRunning(false);
+          setInputLevel(0); // take over: meter returns to silence
         }
       };
 
@@ -495,6 +513,7 @@ export function useSightReading(
     attemptType,
     activeDetector,
     detectedCount,
+    inputLevel,
     countInBeat,
     countInTotalBeats,
     start,

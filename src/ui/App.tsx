@@ -14,6 +14,15 @@
 //   * Synthetic harness — run the evaluation/feedback/results path WITHOUT a
 //                         guitar (a tunable synthetic take), so Gate-3 hardware is
 //                         not needed to exercise the pipeline.
+//
+// PRESENTATION: this file is restyled to the "Signal Tape" direction (design/
+// app.html screen 02 + the app-window chrome). The behaviour is UNCHANGED — every
+// prop, hook, ref, callback, effect and keyboard handler is preserved; only the
+// markup/classNames are reorganised into the design's app-window → topbar → sheet
+// → console → status-bar hierarchy. The structural chrome the global stylesheet
+// (styles.css) does not already own is provided by a scoped <style> below (CSP
+// allows style-src 'unsafe-inline'); the fonts + palette + the styled component
+// classes all come from styles.css.
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import type { Line } from '../domain/index.js';
@@ -21,6 +30,7 @@ import { OsmdView, type CursorHandle } from './components/OsmdView.js';
 import { ConfigPanel } from './components/ConfigPanel.js';
 import { DevicePicker } from './components/DevicePicker.js';
 import { HeadphoneTip } from './components/HeadphoneTip.js';
+import { OnboardingView } from './components/OnboardingView.js';
 import { ResultsScreen } from './components/ResultsScreen.js';
 import {
   useSightReading,
@@ -38,6 +48,8 @@ import {
   DEFAULT_UI_CONFIG,
   generateFreshLine,
   toLineConfig,
+  KEY_CHOICES,
+  POSITION_CHOICES,
   type UiConfig,
 } from './lineConfig.js';
 import { StatsView } from './views/StatsView.js';
@@ -58,10 +70,26 @@ const RETRY_SLOWER_FACTOR = 0.7; // retry_slower tempo = 70% of configured tempo
 /** Which top-level screen is showing (brief M5: switch practice <-> stats). */
 type AppView = 'practice' | 'stats';
 
+/** Short, uppercase attempt-type label for the topbar / status chips. */
+function attemptLabel(type: AttemptType): string {
+  switch (type) {
+    case 'first_read':
+      return 'FIRST READ';
+    case 'retry_at_tempo':
+      return 'RETRY';
+    case 'retry_slower':
+      return 'RETRY · SLOWER';
+  }
+}
+
 export function App(): React.JSX.Element {
   const bridge = typeof window !== 'undefined' ? window.sightReading : undefined;
 
   const [view, setView] = useState<AppView>('practice');
+  // First-run onboarding gate (design screen 01). `null` = still resolving the
+  // persisted `onboardingComplete` flag; `false` = show the setup hero; `true` =
+  // mount the practice/stats app. Resolved once on mount via getAppConfig.
+  const [onboarded, setOnboarded] = useState<boolean | null>(null);
   const [uiConfig, setUiConfig] = useState<UiConfig>(DEFAULT_UI_CONFIG);
   const [line, setLine] = useState<Line | null>(null);
   const [inputDeviceId, setInputDeviceId] = useState<string | undefined>(undefined);
@@ -76,6 +104,9 @@ export function App(): React.JSX.Element {
   // "Hear line": optionally play a soft tone per note alongside the clicks (ON by
   // default — the human asked to hear the line while reading).
   const [melody, setMelody] = useState(true);
+  // Dev tools drawer (synthetic-take harness + detector picker live here, kept
+  // reachable but visually de-emphasised + collapsed by default).
+  const [devToolsOpen, setDevToolsOpen] = useState(false);
 
   const cursorHandleRef = useRef<CursorHandle | null>(null);
   const [cursorReady, setCursorReady] = useState(false);
@@ -108,6 +139,7 @@ export function App(): React.JSX.Element {
     attemptType,
     activeDetector,
     detectedCount,
+    inputLevel,
     countInBeat,
     countInTotalBeats,
     start,
@@ -137,6 +169,26 @@ export function App(): React.JSX.Element {
       }
     });
   }, []);
+
+  // Resolve the first-run onboarding gate on mount: if the user has already
+  // completed setup we go straight to practice; otherwise we open on the design
+  // screen-01 hero. Defaults to "show onboarding" when the flag is unset.
+  useEffect(() => {
+    void getAppConfig().then((cfg) => {
+      setOnboarded(cfg.onboardingComplete === true);
+      console.log(`[UI] onboarding complete=${cfg.onboardingComplete === true}`);
+    });
+  }, []);
+
+  // Finish onboarding: persist the flag, regenerate the first line from the just-
+  // chosen config, and reveal the practice app. Used by both "Start practicing"
+  // and the skip affordance (skip simply keeps the current/default config).
+  const handleFinishOnboarding = useCallback((): void => {
+    setLine(generateFreshLine(uiConfig));
+    setOnboarded(true);
+    void setAppConfig({ onboardingComplete: true });
+    console.log('[UI] onboarding complete — entering practice');
+  }, [uiConfig]);
 
   // Change + persist the detector choice (no-op persistence outside Electron).
   const handleDetectorChange = useCallback((kind: DetectorKind): void => {
@@ -283,9 +335,9 @@ export function App(): React.JSX.Element {
   }, [line, beginRun]);
 
   // Keyboard transport: Enter => Next line, Space => Start (if idle). Inactive on
-  // the stats screen (no transport there).
+  // the stats screen (no transport there) and while onboarding is showing.
   useEffect(() => {
-    if (view !== 'practice') return;
+    if (view !== 'practice' || onboarded !== true) return;
     const onKey = (e: KeyboardEvent): void => {
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === 'INPUT' || tag === 'SELECT' || tag === 'TEXTAREA') return;
@@ -299,9 +351,44 @@ export function App(): React.JSX.Element {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [handleNextLine, handleStart, isRunning, view]);
+  }, [handleNextLine, handleStart, isRunning, view, onboarded]);
 
   const showResults = phase === 'finished' && result !== null;
+
+  // ---- Derived display values for the topbar meta + status bar -------------
+  // All cosmetic, read off existing state (no behaviour change).
+  const keyLabel = (KEY_CHOICES[uiConfig.keyIndex]?.label ?? 'C major').toUpperCase();
+  const posLabel = POSITION_CHOICES[uiConfig.positionIndex]?.label ?? 'V';
+  // Compact position token, e.g. "Open (0-4)" -> "OPEN", "V (4-8)" -> "POS.V".
+  const posToken = (() => {
+    const m = posLabel.match(/^([^(]+)/);
+    const head = (m ? m[1] : posLabel).trim();
+    return /open/i.test(head) ? 'OPEN' : `POS.${head}`;
+  })();
+  const bpm = line?.tempo ?? uiConfig.tempo;
+  const barCount = line?.barCount ?? uiConfig.barCount;
+  // Live "take" number for the tape label — the next line_index the session will
+  // persist (1-based for humans).
+  const takeNo = lineIndexRef.current + 1;
+  // Topbar meta string, DM Mono, mirrors design "LINE 07 / 30 · C MAJOR · POS.5 · ♩ 96".
+  const topMeta = `TAKE ${takeNo} · ${keyLabel} · ${posToken} · ♩ ${bpm}`;
+  // Live pitch-accuracy readout (so-far): use the finished result when present,
+  // otherwise show a dash while reading (the real-time number is committed at the
+  // end — we never fabricate a per-frame score).
+  const pitchPct = result ? Math.round(result.pitchAccuracy * 100) : null;
+  const timingPct = result ? Math.round(result.timingAccuracy * 100) : null;
+  // Status-bar phase token + live flag.
+  const isLive = phase === 'playing';
+  const detectorLabel = (activeDetector ?? detectorKind).toUpperCase();
+  // VU meter: drive from the hook's smoothed inputLevel when a live take is
+  // running; otherwise let the CSS keyframe animation idle the bars.
+  const vuLive = isRunning && inputLevel > 0;
+
+  // Twelve VU bars. When live, each bar's height tracks inputLevel with a fixed
+  // per-bar profile (so the meter "shapes" rather than moving in lock-step); the
+  // hottest bar tips into flux. When idle, no inline height -> the CSS animation
+  // (styles from the design VU) drives them.
+  const VU_PROFILE = [0.42, 0.62, 0.5, 0.78, 0.66, 0.9, 1, 0.82, 0.7, 0.56, 0.46, 0.36];
 
   // Practice body kept as an element value (not a nested component) so toggling
   // the view does not remount the read-along hooks/refs.
@@ -309,119 +396,12 @@ export function App(): React.JSX.Element {
     <>
       <HeadphoneTip />
 
-      <section className="transport">
-        <button
-          className="btn btn-primary"
-          onClick={handleNextLine}
-          title="Generate a fresh line (Enter)"
-        >
-          Next line ⏎
-        </button>
-        <button
-          className="btn"
-          onClick={handleStart}
-          disabled={isRunning || !line}
-          title="Count-in then play + evaluate (Space)"
-        >
-          {isRunning ? 'Running…' : 'Start ␣'}
-        </button>
-        <button className="btn" onClick={stop} disabled={!isRunning}>
-          Stop
-        </button>
-        <label
-          className="hear-line"
-          title="Play a soft tone per note alongside the clicks (synced to the same clock)"
-        >
-          <input
-            type="checkbox"
-            checked={melody}
-            disabled={isRunning}
-            onChange={(e) => setMelody(e.target.checked)}
-          />
-          Hear line
-        </label>
-        <label
-          className="detector-picker"
-          title="pitchy (default, fast) vs CREPE (TensorFlow.js, octave-robust). CREPE falls back to pitchy if its model fails to load. Disabled while running."
-        >
-          Detector:
-          <select
-            value={detectorKind}
-            disabled={isRunning}
-            onChange={(e) => handleDetectorChange(e.target.value as DetectorKind)}
-          >
-            <option value="pitchy">pitchy</option>
-            <option value="crepe">CREPE</option>
-          </select>
-          {isRunning && activeDetector && activeDetector !== detectorKind && (
-            <span
-              className="detector-fallback"
-              title="CREPE model failed to load; running pitchy for this take."
-            >
-              {' '}(running {activeDetector})
-            </span>
-          )}
-        </label>
-        <span className="detected-count">detected: {detectedCount}</span>
-      </section>
-
-      <DevicePicker
-        deviceId={inputDeviceId}
-        disabled={isRunning}
-        onChange={setInputDeviceId}
-      />
-
-      <ConfigPanel config={uiConfig} disabled={isRunning} onChange={setUiConfig} />
-
-      <section className="synthetic-harness">
-        <span className="synthetic-title" title="Drive the whole M4 path with no guitar (Gate-3 preview)">
-          Synthetic take (no hardware):
-        </span>
-        <button
-          className="btn btn-small"
-          onClick={handleSimulatePerfect}
-          disabled={isRunning || !line}
-          title="Every expected note detected on time at the correct pitch -> all green"
-        >
-          Simulate perfect take
-        </button>
-        <button
-          className="btn btn-small"
-          onClick={handleSimulateErrors}
-          disabled={isRunning || !line}
-          title="Fixed mix: 2 wrong-pitch, 1 late, 1 missed, 1 extra -> see every colour"
-        >
-          Simulate take with errors
-        </button>
-        <label
-          className="synthetic-random"
-          title="Use the Start button with this random-accuracy take instead of the mic"
-        >
-          <input
-            type="checkbox"
-            checked={syntheticMode}
-            disabled={isRunning}
-            onChange={(e) => setSyntheticMode(e.target.checked)}
-          />
-          random take on Start
-        </label>
-        {syntheticMode && (
-          <label>
-            accuracy {Math.round(syntheticAccuracy * 100)}%
-            <input
-              type="range"
-              min={0}
-              max={1}
-              step={0.05}
-              value={syntheticAccuracy}
-              disabled={isRunning}
-              onChange={(e) => setSyntheticAccuracy(Number(e.target.value))}
-            />
-          </label>
-        )}
-      </section>
-
+      {/* --- the sheet / take panel (design .sheet) wrapping OSMD ----------- */}
       <section className="staff-area">
+        <span className="sheet-tape">★ TAKE {takeNo} · {attemptLabel(attemptType)}</span>
+        <span className="sheet-clef-meta">
+          treble · {line ? `${line.timeSignature.beats}/${line.timeSignature.beatUnit}` : '4/4'}
+        </span>
         <OsmdView
           line={line}
           ref={(h) => {
@@ -455,20 +435,211 @@ export function App(): React.JSX.Element {
         )}
       </section>
 
-      <section className="phase-line">
-        Phase: <strong>{phase}</strong>
-        {line ? ` · ${line.tempo} BPM · ${line.notes.length} notes` : ''}
-        {' · '}
-        <span
-          className="persist-status"
-          title={
-            persistenceOn
-              ? 'Completed attempts are saved to the SQLite DB (Electron main process).'
-              : 'Persistence is off (browser preview, or the SQLite DB could not be opened).'
-          }
-        >
-          saving: <strong>{persistenceOn ? 'on' : 'off'}</strong>
+      {/* --- the console: transport (left) + VU meter & live accuracy (right) */}
+      <section className="console">
+        <div className="transport">
+          <button
+            className="btn-play"
+            onClick={handleStart}
+            disabled={isRunning || !line}
+            title="Count-in then play + evaluate (Space)"
+          >
+            {isRunning ? '● Running…' : '▶ Play line'}
+          </button>
+          <button
+            className="btn btn-small"
+            onClick={handleNextLine}
+            title="Generate a fresh line (Enter)"
+          >
+            Next ⏎
+          </button>
+          <button className="btn btn-small" onClick={stop} disabled={!isRunning}>
+            Stop
+          </button>
+          <label
+            className="hear-line"
+            title="Play a soft tone per note alongside the clicks (synced to the same clock)"
+          >
+            <input
+              type="checkbox"
+              checked={melody}
+              disabled={isRunning}
+              onChange={(e) => setMelody(e.target.checked)}
+            />
+            Hear line
+          </label>
+          {phase === 'countIn' && countInTotalBeats > 0 && (
+            <span className="console-countin">
+              count-in{' '}
+              <b>
+                {Array.from(
+                  { length: countInTotalBeats },
+                  (_, i) => countInTotalBeats - i,
+                ).join('·')}
+              </b>
+            </span>
+          )}
+        </div>
+
+        <div className="feedback">
+          <div className="vu">
+            <div className="vu-cap">
+              <span>INPUT</span>
+              <span className="peak">{vuLive ? 'LIVE' : 'IDLE'}</span>
+            </div>
+            <div className={'bars' + (vuLive ? ' is-driven' : '')}>
+              {VU_PROFILE.map((p, i) => {
+                // Live: scale this bar by inputLevel × its profile weight; the
+                // loudest profile bar tips into flux above a threshold.
+                const h = vuLive
+                  ? Math.max(8, Math.min(100, inputLevel * 100 * p * 1.6))
+                  : undefined;
+                const hot = vuLive && p >= 0.95 && inputLevel * p > 0.45;
+                return (
+                  <span
+                    key={i}
+                    className={'bar' + (hot ? ' is-hot' : '')}
+                    style={h !== undefined ? { height: `${h}%` } : undefined}
+                  />
+                );
+              })}
+            </div>
+          </div>
+          <div className="score">
+            <div className="v">
+              {pitchPct === null ? '—' : pitchPct}
+              <sup>%</sup>
+            </div>
+            <div className="l">pitch · {result ? 'take' : 'so far'}</div>
+          </div>
+        </div>
+      </section>
+
+      {/* --- studio status bar (design .statusbar) ------------------------- */}
+      <div className="statusbar">
+        <span>
+          <span className={'live' + (isLive ? '' : ' is-idle')}>● {isLive ? 'LIVE' : phase.toUpperCase()}</span>
+          {' · '}detecting ({detectorLabel}) · bar {barCount} / {barCount}
         </span>
+        <span className="chips">
+          <span>{attemptLabel(attemptType)}</span>
+          <span>TIMING {timingPct === null ? '—' : `${timingPct}%`}</span>
+          <span
+            className="persist-status"
+            title={
+              persistenceOn
+                ? 'Completed attempts are saved to the SQLite DB (Electron main process).'
+                : 'Persistence is off (browser preview, or the SQLite DB could not be opened).'
+            }
+          >
+            {persistenceOn ? 'SAVED ●' : 'SAVING OFF'}
+          </span>
+        </span>
+      </div>
+
+      <ConfigPanel config={uiConfig} disabled={isRunning} onChange={setUiConfig} />
+
+      {/* --- Dev tools drawer: synthetic-take harness + detector picker +
+              device picker + detected count. Collapsed by default, kept fully
+              functional but visually de-emphasised. --------------------------- */}
+      <section className="dev-tools" data-open={devToolsOpen ? 'true' : 'false'}>
+        <button
+          type="button"
+          className="dev-tools-toggle"
+          aria-expanded={devToolsOpen}
+          onClick={() => setDevToolsOpen((o) => !o)}
+        >
+          <span className="dev-tools-caret">{devToolsOpen ? '▾' : '▸'}</span>
+          Dev tools
+          <span className="dev-tools-hint">
+            synthetic take · detector · input device
+          </span>
+        </button>
+
+        {devToolsOpen && (
+          <div className="dev-tools-body">
+            <div className="synthetic-harness">
+              <span
+                className="synthetic-title"
+                title="Drive the whole M4 path with no guitar (Gate-3 preview)"
+              >
+                Synthetic take (no hardware):
+              </span>
+              <button
+                className="btn btn-small"
+                onClick={handleSimulatePerfect}
+                disabled={isRunning || !line}
+                title="Every expected note detected on time at the correct pitch -> all green"
+              >
+                Simulate perfect take
+              </button>
+              <button
+                className="btn btn-small"
+                onClick={handleSimulateErrors}
+                disabled={isRunning || !line}
+                title="Fixed mix: 2 wrong-pitch, 1 late, 1 missed, 1 extra -> see every colour"
+              >
+                Simulate take with errors
+              </button>
+              <label
+                className="synthetic-random"
+                title="Use the Start button with this random-accuracy take instead of the mic"
+              >
+                <input
+                  type="checkbox"
+                  checked={syntheticMode}
+                  disabled={isRunning}
+                  onChange={(e) => setSyntheticMode(e.target.checked)}
+                />
+                random take on Start
+              </label>
+              {syntheticMode && (
+                <label>
+                  accuracy {Math.round(syntheticAccuracy * 100)}%
+                  <input
+                    type="range"
+                    min={0}
+                    max={1}
+                    step={0.05}
+                    value={syntheticAccuracy}
+                    disabled={isRunning}
+                    onChange={(e) => setSyntheticAccuracy(Number(e.target.value))}
+                  />
+                </label>
+              )}
+            </div>
+
+            <label
+              className="detector-picker"
+              title="pitchy (default, fast) vs CREPE (TensorFlow.js, octave-robust). CREPE falls back to pitchy if its model fails to load. Disabled while running."
+            >
+              Detector:
+              <select
+                value={detectorKind}
+                disabled={isRunning}
+                onChange={(e) => handleDetectorChange(e.target.value as DetectorKind)}
+              >
+                <option value="pitchy">pitchy</option>
+                <option value="crepe">CREPE</option>
+              </select>
+              {isRunning && activeDetector && activeDetector !== detectorKind && (
+                <span
+                  className="detector-fallback"
+                  title="CREPE model failed to load; running pitchy for this take."
+                >
+                  {' '}(running {activeDetector})
+                </span>
+              )}
+            </label>
+            <span className="detected-count">detected: {detectedCount}</span>
+
+            <DevicePicker
+              deviceId={inputDeviceId}
+              disabled={isRunning}
+              onChange={setInputDeviceId}
+            />
+          </div>
+        )}
       </section>
 
       {showResults && line && result && (
@@ -487,41 +658,298 @@ export function App(): React.JSX.Element {
 
   return (
     <main className="app-shell read-along">
-      <header className="app-header">
-        <div>
-          <h1>Sight Reading</h1>
-          <p className="subtitle">
-            Milestone 5 — persistence · session loop · stats
-          </p>
-        </div>
-        <nav className="view-switch" aria-label="View">
-          <button
-            className={'btn btn-small' + (view === 'practice' ? ' is-active' : '')}
-            onClick={() => setView('practice')}
-            aria-pressed={view === 'practice'}
-          >
-            Practice
-          </button>
-          <button
-            className={'btn btn-small' + (view === 'stats' ? ' is-active' : '')}
-            onClick={() => setView('stats')}
-            aria-pressed={view === 'stats'}
-          >
-            Stats
-          </button>
-        </nav>
-        <p className="env-line">
-          {bridge?.isElectron
-            ? `Electron ${bridge.versions.electron} · Chromium ${bridge.versions.chrome}`
-            : 'Browser preview (outside Electron)'}
-        </p>
-      </header>
+      {/* Scoped structural chrome the global stylesheet does not already own
+          (app-window frame, topbar meta, console grid, VU meter, score readout,
+          status bar, dev-tools drawer). Palette/fonts/component styles come from
+          styles.css; CSP permits style-src 'unsafe-inline'. */}
+      <style>{SHELL_CSS}</style>
 
-      {/* Keep the practice body MOUNTED while on stats (hidden) so the read-along
-          hooks/refs/audio graph survive a tab switch; only stats is conditionally
-          mounted. */}
-      <div hidden={view !== 'practice'}>{practiceBody}</div>
-      {view === 'stats' && <StatsView />}
+      <div className="app-window">
+        {/* halftone dot-screen texture over the window (design screen 02
+            <div class="tex-half">); content below lifts above it via .z. */}
+        <div className="tex-half" aria-hidden="true" />
+
+        {/* window chrome bar (design .win-bar) */}
+        <div className="win-bar z">
+          <span className="app-id">
+            SIGHT <b>READING</b>.app
+          </span>
+          <span className="win-ctl">
+            <span className={'sq' + (isLive ? ' live' : '')} />
+            {isLive ? 'recording' : 'ready'}
+            <span className="sq" />
+            <span className="sq" />
+            <span className="sq" />
+          </span>
+        </div>
+
+        {/* First-run onboarding hero (design screen 01). Shown until the
+            persisted onboardingComplete flag is set; the win-bar stays, but the
+            topbar/view-switch and the practice/stats stages are withheld so the
+            screen is the distinct setup hero the design opens on. */}
+        {onboarded === false && (
+          <div className="stage z onboarding-stage">
+            <OnboardingView
+              config={uiConfig}
+              onChange={setUiConfig}
+              inputDeviceId={inputDeviceId}
+              onDeviceChange={setInputDeviceId}
+              onStart={handleFinishOnboarding}
+            />
+          </div>
+        )}
+
+        {/* The main app (practice / stats), revealed once onboarding is done. */}
+        {onboarded === true && (
+          <>
+            {/* topbar: brand + meta, then the ultramarine accent rule (design) */}
+            <header className="app-header topbar z">
+              <span className="brand">
+                SIGHT <b>READING</b>
+              </span>
+              <nav className="view-switch" aria-label="View">
+                <button
+                  className={'btn btn-small' + (view === 'practice' ? ' is-active' : '')}
+                  onClick={() => setView('practice')}
+                  aria-pressed={view === 'practice'}
+                >
+                  Practice
+                </button>
+                <button
+                  className={'btn btn-small' + (view === 'stats' ? ' is-active' : '')}
+                  onClick={() => setView('stats')}
+                  aria-pressed={view === 'stats'}
+                >
+                  Stats
+                </button>
+              </nav>
+              <span className="meta">
+                {view === 'practice'
+                  ? topMeta
+                  : bridge?.isElectron
+                    ? `ELECTRON ${bridge.versions.electron} · CHROMIUM ${bridge.versions.chrome}`
+                    : 'BROWSER PREVIEW'}
+              </span>
+            </header>
+            <div className="accent-rule z" />
+
+            {/* Keep the practice body MOUNTED while on stats (hidden) so the
+                read-along hooks/refs/audio graph survive a tab switch; only stats
+                is conditionally mounted. */}
+            <div className="stage z" hidden={view !== 'practice'}>
+              {practiceBody}
+            </div>
+            {view === 'stats' && (
+              <div className="stage z">
+                <StatsView />
+              </div>
+            )}
+          </>
+        )}
+      </div>
     </main>
   );
 }
+
+// -----------------------------------------------------------------------------
+// Scoped structural CSS (the "Signal Tape" app-window chrome). styles.css ports
+// the palette/fonts + the styled component classes (.btn, .transport, .staff-area,
+// .vu .bar via the count-in etc.); this block adds ONLY the layout chrome that
+// stylesheet does not define, ported 1:1 from design/app.html + signal-tape.css.
+// Kept here because this file is the sole owned surface; CSP allows inline styles.
+// -----------------------------------------------------------------------------
+const SHELL_CSS = `
+  /* app-window frame (design .win) */
+  .app-window {
+    border: 1.5px solid var(--ink);
+    background: var(--paper);
+    box-shadow: 0 26px 64px rgba(0, 0, 0, 0.28);
+    overflow: hidden;
+    position: relative;
+  }
+  /* crop-marks — frame the SHEET (the .app-window box), not the viewport (design
+     .crops). Absolutely positioned on the relative window so they register the
+     window box and travel with it on scroll. z:3 lifts them above the halftone
+     texture (z:1) and content (z:2). */
+  .app-window::before,
+  .app-window::after {
+    content: "";
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    pointer-events: none;
+    z-index: 3;
+  }
+  .app-window::before {
+    left: 10px;
+    top: 10px;
+    border-left: 1.5px solid var(--ink);
+    border-top: 1.5px solid var(--ink);
+  }
+  .app-window::after {
+    right: 10px;
+    bottom: 10px;
+    border-right: 1.5px solid var(--ink);
+    border-bottom: 1.5px solid var(--ink);
+  }
+  /* the halftone dot-screen layer (design screen 02 <div class="tex-half">),
+     absolutely filling the window beneath the content (.z lifts content above). */
+  .app-window .tex-half { z-index: 1; }
+  .win-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 9px 14px; border-bottom: 1.5px solid var(--ink); background: var(--paper-3);
+  }
+  .win-bar .app-id { font-family: var(--mono); font-size: 11px; letter-spacing: .14em; }
+  .win-bar .app-id b { color: var(--blue); }
+  .win-bar .win-ctl {
+    display: flex; gap: 7px; align-items: center;
+    font-family: var(--mono); color: var(--ink-2); font-size: 12px;
+  }
+  .win-bar .win-ctl .sq {
+    width: 10px; height: 10px; border: 1.5px solid var(--ink); display: inline-block;
+  }
+  .win-bar .win-ctl .sq.live { background: var(--flux); border-color: var(--flux); border-radius: 50%; }
+
+  /* topbar: brand + meta in DM Mono (design .topbar) — reuses .app-header from
+     styles.css for the bottom rule/accent, but we restate the layout here. */
+  .app-header.topbar {
+    align-items: center;
+    padding: 14px 22px 12px;
+    border-bottom: none;            /* the accent-rule div draws the structure line */
+    margin: 0;
+  }
+  .app-header.topbar::after { display: none; }   /* use the explicit accent-rule div */
+  .app-header.topbar .brand {
+    font-family: var(--mono); font-size: 12px; letter-spacing: .22em;
+    text-transform: uppercase; font-weight: 500; color: var(--ink);
+  }
+  .app-header.topbar .brand b { color: var(--blue); }
+  .app-header.topbar .meta {
+    font-family: var(--mono); font-size: 11px; color: var(--ink-2);
+    margin-left: auto; text-align: right;
+  }
+  .app-header.topbar .view-switch { margin: 0 18px; }
+
+  .accent-rule { height: 3px; background: var(--blue); }
+
+  /* the working stage inside the window */
+  .stage {
+    display: flex; flex-direction: column; gap: 18px;
+    padding: 22px 22px 24px;
+  }
+  /* the [hidden] HTML attribute must still win over the flex display above so a
+     view switch truly collapses the inactive stage (practice stays MOUNTED but
+     hidden to preserve its hooks/refs/audio graph). */
+  .stage[hidden] { display: none; }
+  /* the onboarding hero owns its own padding/gap (design .onb), so its stage
+     wrapper sheds the practice-stage padding + flex gap. */
+  .stage.onboarding-stage { display: block; padding: 0; gap: 0; }
+
+  /* sheet take/clef tape (design .sheet .tape / .clef-meta) — anchored on the
+     .staff-area panel from styles.css. We supersede its ::before tape with an
+     explicit, dynamic label element. */
+  .staff-area::before { content: none !important; }
+  .staff-area .sheet-tape {
+    position: absolute; top: -11px; left: 18px; z-index: 2;
+    background: var(--flux); color: #fff;
+    font-family: var(--mono); font-size: 10px; letter-spacing: .08em;
+    padding: 3px 8px; transform: rotate(-1.4deg); box-shadow: 2px 2px 0 var(--ink);
+    pointer-events: none;
+  }
+  .staff-area .sheet-clef-meta {
+    position: absolute; top: -10px; right: 14px; z-index: 2;
+    background: var(--paper-2); padding: 0 6px;
+    font-family: var(--mono); font-size: 10px; color: var(--ink-3);
+  }
+
+  /* console: transport (left) + feedback (right) — design .console */
+  .console {
+    display: grid; grid-template-columns: 1fr auto; gap: 22px; align-items: end;
+  }
+  @media (max-width: 760px) { .console { grid-template-columns: 1fr; } }
+
+  /* Play slab (design .btn-play) */
+  .btn-play {
+    display: inline-flex; align-items: center; gap: 9px;
+    background: var(--ink); color: var(--paper);
+    font-family: var(--disp); font-weight: 900; font-size: 13px;
+    letter-spacing: .1em; text-transform: uppercase;
+    border: 0; padding: 13px 20px; cursor: pointer; border-radius: var(--r);
+    box-shadow: 4px 4px 0 var(--flux);
+    transition: transform .12s ease, box-shadow .12s ease;
+  }
+  .btn-play:hover:not(:disabled) { transform: translate(-1px,-1px); box-shadow: 6px 6px 0 var(--flux); }
+  .btn-play:disabled { opacity: .5; cursor: default; box-shadow: 4px 4px 0 var(--line); }
+
+  .console-countin { font-family: var(--mono); font-size: 11px; color: var(--ink-3); }
+  .console-countin b { color: var(--flux); }
+
+  /* feedback cluster: VU + score (design .feedback / .vu / .score) */
+  .feedback { display: flex; align-items: flex-end; gap: 22px; }
+
+  .vu .vu-cap {
+    font-family: var(--mono); font-size: 9px; letter-spacing: .14em;
+    color: var(--ink-3); display: flex; justify-content: space-between; margin-bottom: 5px;
+  }
+  .vu .vu-cap .peak { color: var(--flux); }
+  .vu .bars {
+    display: flex; gap: 3px; align-items: flex-end; height: 48px; width: 192px;
+    border-bottom: 1.5px solid var(--ink);
+  }
+  @media (max-width: 760px) { .vu .bars { width: 100%; } }
+  .vu .bar {
+    flex: 1; background: var(--blue); min-width: 4px; transform-origin: bottom;
+    animation: vu 1.1s ease-in-out infinite alternate;
+  }
+  /* When driven by inputLevel we set inline heights and pause the idle animation. */
+  .vu .bars.is-driven .bar { animation: none; transition: height 90ms linear; }
+  .vu .bar.is-hot { background: var(--flux); }
+  @keyframes vu { from { transform: scaleY(.55); } to { transform: scaleY(1); } }
+  .vu .bars:not(.is-driven) .bar:nth-child(odd) { animation-duration: .9s; }
+  .vu .bars:not(.is-driven) .bar:nth-child(3n)  { animation-duration: 1.4s; }
+  .vu .bars:not(.is-driven) .bar:nth-child(5n)  { animation-duration: .7s; }
+
+  .score { text-align: right; }
+  .score .v {
+    font-family: var(--disp); font-weight: 900; font-size: 48px; line-height: .85;
+    letter-spacing: -0.04em; color: var(--ink);
+  }
+  .score .v sup { font-size: 16px; color: var(--blue); }
+  .score .l {
+    font-family: var(--mono); font-size: 10px; letter-spacing: .14em;
+    text-transform: uppercase; color: var(--ink-3); margin-top: 4px;
+  }
+
+  /* status bar (design .statusbar) */
+  .statusbar {
+    display: flex; justify-content: space-between; align-items: center;
+    border-top: 1px solid var(--line); padding: 12px 0 2px;
+    font-family: var(--mono); font-size: 11px; color: var(--ink-2);
+  }
+  .statusbar .live { color: var(--flux); }
+  .statusbar .live.is-idle { color: var(--ink-3); }
+  .statusbar .chips { display: flex; gap: 14px; align-items: center; }
+  .statusbar .persist-status { color: var(--ink-3); }
+
+  /* Dev tools drawer — quiet, recessed, collapsed by default. */
+  .dev-tools {
+    border: 1.5px dashed var(--ink-3); border-radius: var(--r);
+    background: var(--paper-3); opacity: .9;
+  }
+  .dev-tools[data-open="true"] { opacity: 1; }
+  .dev-tools-toggle {
+    display: flex; align-items: center; gap: 10px; width: 100%;
+    background: transparent; border: 0; cursor: pointer; text-align: left;
+    padding: 10px 16px;
+    font-family: var(--mono); font-size: 12px; letter-spacing: .04em; color: var(--ink-2);
+  }
+  .dev-tools-toggle:hover { color: var(--ink); }
+  .dev-tools-caret { color: var(--ink-3); width: 1em; }
+  .dev-tools-hint { color: var(--ink-3); margin-left: auto; font-size: 11px; }
+  .dev-tools-body {
+    display: flex; flex-direction: column; gap: 14px;
+    padding: 4px 16px 16px;
+  }
+  /* inside the drawer the harness sheds its own border (the drawer frames it) */
+  .dev-tools-body .synthetic-harness { border: 0; background: transparent; padding: 0; opacity: 1; }
+`;

@@ -33,7 +33,7 @@
 // ============================================================================
 
 import { PitchDetector as PitchyDetector } from 'pitchy';
-import { frequencyToMidi } from './pitchMath.js';
+import { frequencyToMidi, rmsLevel } from './pitchMath.js';
 import {
   OnsetSegmenter,
   DEFAULT_SEGMENTER_CONFIG,
@@ -111,6 +111,12 @@ export interface PitchDetectorOptions {
   /** Called when the segmenter COMMITS a new note onset — this is what feeds the
    *  evaluation pipeline (DetectedNote { midi, onsetMs, clarity }). */
   onNote?: (note: DetectedNote) => void;
+  /** Called once per analysis frame with the RAW (unsmoothed) RMS amplitude in
+   *  [0,1] of the SAME time-domain buffer the detector just analysed — purely a
+   *  read-only readout for a VU meter. Computing/reporting it CANNOT change any
+   *  detection result (it does not touch the buffer or the detector). A silent
+   *  frame (all zeros) reports 0. Optional; omit it and no level is computed. */
+  onLevel?: (level: number) => void;
   /** Override the onset-segmentation tuning (defaults to DEFAULT_SEGMENTER_CONFIG
    *  with clarityFloor pinned to CLARITY_THRESHOLD). */
   segmenterConfig?: SegmenterConfig;
@@ -209,6 +215,10 @@ export class LivePitchDetector {
   private analyseOnce(): void {
     // copy current time-domain samples into our buffer.
     this.analyser.getFloatTimeDomainData(this.buffer);
+    // Read-only VU readout off the SAME buffer (before findPitch, so even if a
+    // future change reused the buffer it'd be the analysed frame). Does not alter
+    // detection: findPitch sees the identical, untouched buffer.
+    if (this.opts.onLevel) this.opts.onLevel(rmsLevel(this.buffer));
     const [frequencyHz, clarity] = this.detector.findPitch(
       this.buffer,
       this.ctx.sampleRate,

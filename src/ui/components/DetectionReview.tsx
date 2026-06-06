@@ -326,17 +326,17 @@ function PitchTimeGraph({
 
       <div className="review-graph-legend">
         <span className="review-legend-item">
-          <span className="review-legend-bar" /> expected
+          <span className="review-legend-bar" /> written
+        </span>
+        <span className="review-legend-item">
+          <span className="review-legend-dot" /> your onset
+          {isLive ? '' : ' (synthetic)'}
         </span>
         {isLive && (
           <span className="review-legend-item">
-            <span className="review-legend-trace" /> detected trace (live)
+            <span className="review-legend-trace" /> pitch trace
           </span>
         )}
-        <span className="review-legend-item">
-          <span className="review-legend-dot" /> detected onset
-          {isLive ? '' : ' (synthetic)'}
-        </span>
       </div>
     </div>
   );

@@ -37,6 +37,7 @@ export {
   centsOffNearestMidi,
   isInGuitarRange,
   isUsableDetection,
+  rmsLevel,
 } from './pitchMath.js';
 
 // --- onset segmentation (PURE; node-testable) ---
@@ -96,4 +97,5 @@ export {
   ensureMicPermission,
   RECORDING_MIME_TYPE,
   DEFAULT_DETECTOR_KIND,
+  INPUT_LEVEL_SMOOTHING,
 } from './audioGraph.js';

@@ -1,15 +1,83 @@
-/* Minimal functional styling. Throwaway prototype — no visual polish (brief section 2).
-   Dark background so a future white OSMD staff reads clearly against it. */
+/* =============================================================================
+   SIGHT READING — "Signal Tape" design system (renderer)
+   Record-sleeve austerity (Swiss grid, oversized type, crop-marks, whitespace)
+   warmed by analog-studio riso (bone paper, halftone, mono console voice, VU).
 
-:root {
-  color-scheme: dark;
-  --bg: #15171c;
-  --fg: #e8eaed;
-  --muted: #9aa0a6;
-  --accent: #4f9cff;
+   Ported from design/signal-tape.css + design/app.html to the live app's markup.
+   Behaviour is unchanged: this file only restyles existing classNames.
+
+   Color logic (two-colour discipline, with meaning):
+     bone + ink  = the canvas
+     ultramarine = STRUCTURE / brand / data
+     flux orange = ENERGY / the live note / feedback only
+   Type:  Archivo (display, heavy) + DM Mono (labels, data, captions)
+
+   Fonts are BUNDLED same-origin (src/ui/public/fonts -> served at /fonts) so the
+   strict CSP (default-src 'self') is satisfied — no external Google Fonts request.
+============================================================================= */
+
+/* ----------------------------------------------------------------------------
+   FONTS — bundled woff2, referenced root-absolute so Vite serves them from the
+   renderer web root (/fonts/...), same-origin under default-src 'self'.
+   Archivo ships as a single variable file (weight axis 400–900).
+---------------------------------------------------------------------------- */
+@font-face {
+  font-family: 'Archivo';
+  font-style: normal;
+  font-weight: 400 900;
+  font-display: swap;
+  src: url('/fonts/archivo-latin-var.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/dmmono-latin-400.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'DM Mono';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/dmmono-latin-500.woff2') format('woff2');
 }
 
-* {
+/* ----------------------------------------------------------------------------
+   TOKENS
+---------------------------------------------------------------------------- */
+:root {
+  color-scheme: light;
+
+  --paper:   #ece7da;   /* warm bone / newsprint   */
+  --paper-2: #f3efe4;   /* lifted panel            */
+  --paper-3: #e2dccb;   /* sunken / inset          */
+  --ink:     #141210;   /* near-black              */
+  --ink-2:   #4a463f;   /* soft ink                */
+  --ink-3:   #8a8478;   /* faded / captions        */
+  --line:    #cfc8b6;   /* hairline rules          */
+  --blue:    #1d3df0;   /* ultramarine — structure */
+  --blue-d:  #142bb0;
+  --flux:    #ff5b1f;   /* flux orange — live/feedback */
+  --ok:      #1f8f5b;   /* in-tune / correct (used sparingly) */
+  --warn:    #c2823a;   /* late / amber */
+
+  --disp: 'Archivo', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --mono: 'DM Mono', ui-monospace, 'SF Mono', Menlo, monospace;
+
+  --r: 4px;             /* the system is square; corners are tiny */
+
+  /* legacy aliases so any stray reference still resolves to the new palette */
+  --bg: var(--paper);
+  --fg: var(--ink);
+  --muted: var(--ink-3);
+  --accent: var(--blue);
+  --text: var(--ink);
+}
+
+*,
+*::before,
+*::after {
   box-sizing: border-box;
 }
 
@@ -18,127 +86,656 @@ body {
   margin: 0;
   padding: 0;
   height: 100%;
-  background: var(--bg);
-  color: var(--fg);
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--disp);
+  line-height: 1.5;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 #root {
   height: 100%;
 }
 
-.app-shell {
-  padding: 24px 32px;
+img,
+svg {
+  display: block;
+  max-width: 100%;
 }
 
-.app-shell h1 {
-  margin: 0 0 4px;
-  font-size: 28px;
-  font-weight: 600;
+a {
+  color: var(--blue);
 }
 
-.subtitle {
-  margin: 0 0 16px;
-  color: var(--muted);
-}
-
-.env-line {
+h1,
+h2,
+h3 {
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  line-height: 0.98;
   margin: 0;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 13px;
-  color: var(--accent);
 }
 
-/* ---- Milestone 3 read-along layout ---- */
+code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+
+/* Subtle paper grain across the whole canvas (the riso warmth). */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+  opacity: 0.3;
+  z-index: 9999;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+}
+
+/* ----------------------------------------------------------------------------
+   TEXTURES — the riso warmth (design signal-tape.css .tex-half). The blue
+   halftone dot-screen laid over a position:relative window; lifted content sits
+   above it via .z. .is-warm swaps the dots to flux orange. Used on the practice
+   window (App.tsx adds a .tex-half layer inside .app-window).
+---------------------------------------------------------------------------- */
+.tex-half {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+  opacity: 0.1;
+  mix-blend-mode: multiply;
+  background-image: radial-gradient(var(--blue) 22%, transparent 23%);
+  background-size: 7px 7px;
+}
+.tex-half.is-warm {
+  background-image: radial-gradient(var(--flux) 22%, transparent 23%);
+}
+
+/* lift real content above the textures (design .z) */
+.z {
+  position: relative;
+  z-index: 2;
+}
+
+/* ----------------------------------------------------------------------------
+   PAGE-LOAD REVEAL (design signal-tape.css) — one orchestrated, staggered
+   entrance. Applied to first paint of each screen / the onboarding cards.
+---------------------------------------------------------------------------- */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.reveal {
+  opacity: 0;
+  animation: rise 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) forwards;
+}
+.reveal.d1 {
+  animation-delay: 0.06s;
+}
+.reveal.d2 {
+  animation-delay: 0.14s;
+}
+.reveal.d3 {
+  animation-delay: 0.22s;
+}
+.reveal.d4 {
+  animation-delay: 0.3s;
+}
+.reveal.d5 {
+  animation-delay: 0.4s;
+}
+.reveal.d6 {
+  animation-delay: 0.5s;
+}
+
+/* ----------------------------------------------------------------------------
+   TYPE PRIMITIVES
+---------------------------------------------------------------------------- */
+.mono {
+  font-family: var(--mono);
+}
+.kicker {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+
+/* ----------------------------------------------------------------------------
+   APP SHELL  (App.tsx: <main class="app-shell read-along">)
+   The renderer window IS the "win" chrome from the design — we frame the whole
+   sheet on the bone canvas with crop-marks + an accent rule.
+---------------------------------------------------------------------------- */
+.app-shell {
+  max-width: 1040px;
+  margin: 0 auto;
+  padding: 32px 24px 96px;
+}
 
 .read-along {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
 }
 
+/* crop-marks — the recurring print / record-sleeve motif (design .crops). These
+   frame the bordered SHEET (the .app-window artboard), NOT the browser viewport,
+   so they register the window box and travel with it on scroll. The corners are
+   drawn by .app-window::before/::after below (it is position:relative). */
+
+/* ---- header / topbar (App.tsx: app-header, subtitle, env-line, view-switch) - */
 .app-header {
+  position: relative;
   display: flex;
-  align-items: flex-start;
+  align-items: baseline;
   justify-content: space-between;
   gap: 16px;
+  flex-wrap: wrap;
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 14px;
+}
+
+.app-header h1 {
+  font-size: 26px;
+  letter-spacing: -0.04em;
+  text-transform: uppercase;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--ink-2);
 }
 
 .app-header .subtitle {
   margin: 4px 0 0;
 }
 
-.transport {
+.env-line {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+}
+
+/* a 3px ultramarine accent rule under the header, like design .accent-rule */
+.app-header::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 3px;
+  background: var(--blue);
+}
+
+/* ----------------------------------------------------------------------------
+   VIEW SWITCH (Practice / Stats) — segmented tabs (design .seg)
+---------------------------------------------------------------------------- */
+.view-switch {
   display: flex;
-  gap: 12px;
+  gap: 6px;
   align-items: center;
 }
 
+/* ----------------------------------------------------------------------------
+   BUTTONS  (design .btn family)
+   .btn          -> ghost / mono (secondary)
+   .btn-primary  -> ink slab with flux shadow (the loud action)
+   .btn-small    -> compact ghost (dev tools, tabs)
+   .is-active    -> selected tab (ink fill)
+---------------------------------------------------------------------------- */
 .btn {
-  font: inherit;
-  padding: 10px 16px;
-  border-radius: 8px;
-  border: 1px solid #3a3f47;
-  background: #232730;
-  color: var(--fg);
+  font-family: var(--mono);
+  font-weight: 500;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  background: transparent;
+  color: var(--ink);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r);
+  padding: 11px 16px;
   cursor: pointer;
+  box-shadow: none;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease;
 }
-
+.btn:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--paper);
+}
 .btn:disabled {
-  opacity: 0.4;
+  opacity: 0.38;
   cursor: default;
+}
+.btn:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
 }
 
 .btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #06121f;
-  font-weight: 700;
-  font-size: 18px;
-  padding: 14px 28px;
+  font-family: var(--disp);
+  font-weight: 900;
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: var(--ink);
+  color: var(--paper);
+  border: 0;
+  padding: 14px 22px;
+  box-shadow: 4px 4px 0 var(--flux);
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--ink);
+  color: var(--paper);
+  transform: translate(-1px, -1px);
+  box-shadow: 6px 6px 0 var(--flux);
+}
+.btn-primary:disabled {
+  box-shadow: 4px 4px 0 var(--line);
 }
 
-.config-panel {
+.btn-small {
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 8px 12px;
+}
+
+/* selected tab / toggled-on small button (design .seg .opt.on / .filters .f.on) */
+.btn.is-active {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+  font-weight: 600;
+}
+
+/* ----------------------------------------------------------------------------
+   TRANSPORT  (App.tsx: transport row — Next / Start / Stop + toggles)
+---------------------------------------------------------------------------- */
+.transport {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 4px 0 2px;
+  border-top: 3px solid var(--blue);
+  padding-top: 16px;
+}
+
+/* "Hear line" checkbox toggle (design .chip-toggle) */
+.hear-line {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-2);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r);
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.hear-line input {
+  accent-color: var(--blue);
+}
+
+/* Detector picker (pitchy | CREPE). Kept reachable but quiet (mono caption). */
+.detector-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.detector-picker select {
+  font-family: var(--mono);
+  font-size: 12px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r);
+  padding: 6px 8px;
+}
+.detector-fallback {
+  color: var(--flux); /* warn: CREPE fell back to pitchy this take */
+  font-weight: 500;
+}
+
+.detected-count {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-3);
+  margin-left: auto;
+}
+
+/* ----------------------------------------------------------------------------
+   HEADPHONE TIP  (design .onb .tip — dashed advisory)
+---------------------------------------------------------------------------- */
+.headphone-tip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 11px 16px;
+  border: 1.5px dashed var(--ink);
+  border-radius: var(--r);
+  background: var(--paper-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-2);
+}
+
+/* ----------------------------------------------------------------------------
+   ONBOARDING / SETUP  (design/app.html screen 01 — first-run hero)
+   The encouraging first paint: kicker + headline + .sub copy, the MIC CHECK
+   hero (DevicePicker, promoted out of dev-tools), three .scard setup cards and
+   the Start CTA. Cards rise in with the staggered .reveal motion.
+---------------------------------------------------------------------------- */
+.onboarding {
+  display: flex;
+  flex-direction: column;
+}
+.onb {
+  padding: 30px 26px 26px;
+}
+.onb .hello {
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: 30px;
+  align-items: start;
+}
+@media (max-width: 760px) {
+  .onb .hello {
+    grid-template-columns: 1fr;
+  }
+}
+.onb h2 {
+  font-size: clamp(30px, 5vw, 46px);
+  max-width: 12ch;
+}
+.onb .sub {
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--ink-2);
+  max-width: 42ch;
+  margin-top: 14px;
+}
+/* the dashed headphone advisory inside the hello column (design .onb .tip) */
+.onb .tip {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 20px;
+  border: 1.5px dashed var(--ink);
+  border-radius: var(--r);
+  padding: 11px 14px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-2);
+}
+.onb .tip .em {
+  font-size: 16px;
+}
+/* the MIC CHECK hero slot — the promoted DevicePicker fills this column. */
+.onb .mic-slot {
+  align-self: stretch;
+}
+/* three setup cards (design .onb .setup) */
+.onb .setup {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-top: 30px;
+}
+@media (max-width: 760px) {
+  .onb .setup {
+    grid-template-columns: 1fr;
+  }
+}
+.scard {
+  border: 1.5px solid var(--ink);
+  background: var(--paper-2);
+  border-radius: var(--r);
+  padding: 16px;
+  position: relative;
+}
+.scard .no {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--blue);
+}
+.scard h3 {
+  font-size: 17px;
+  margin: 8px 0 12px;
+}
+/* segmented option group (design .seg / .opt) */
+.seg {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.seg .opt {
+  font-family: var(--mono);
+  font-size: 12px;
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r);
+  padding: 6px 10px;
+  cursor: pointer;
+  background: var(--paper);
+  color: var(--ink);
+  white-space: nowrap;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+.seg .opt:hover:not(:disabled) {
+  background: var(--paper-3);
+}
+.seg .opt.on {
+  background: var(--ink);
+  color: var(--paper);
+}
+.seg .opt.flux {
+  background: var(--flux);
+  color: #fff;
+  border-color: var(--flux);
+}
+/* Start CTA row (design .onb .go) */
+.onb .go {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 24px;
+  flex-wrap: wrap;
+}
+.onb .go .skip {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* ----------------------------------------------------------------------------
+   FORM PANELS  (config-panel, device-picker)  — design .panel / .scard feel
+---------------------------------------------------------------------------- */
+.config-panel,
+.device-picker {
   display: flex;
   flex-wrap: wrap;
   gap: 16px;
-  padding: 12px 16px;
-  background: #1b1e25;
-  border: 1px solid #2a2e36;
-  border-radius: 8px;
+  align-items: flex-end;
+  padding: 16px 18px;
+  background: var(--paper-2);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r);
 }
 
-.config-panel label {
+.config-panel label,
+.device-picker label,
+.stats-filters label {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--muted);
+  gap: 5px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
 
 .config-panel select,
-.config-panel input {
-  font: inherit;
-  padding: 6px 8px;
-  background: #11141a;
-  color: var(--fg);
-  border: 1px solid #2a2e36;
-  border-radius: 6px;
-  min-width: 90px;
+.config-panel input,
+.device-picker select,
+.stats-filters select {
+  font-family: var(--mono);
+  font-size: 13px;
+  padding: 7px 9px;
+  background: var(--paper);
+  color: var(--ink);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r);
+  min-width: 96px;
+}
+.device-picker select {
+  min-width: 220px;
 }
 
-/* OSMD renders dark notation; give it a light background so it reads clearly. */
+.device-warn {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--flux);
+  align-self: center;
+}
+
+/* ----------------------------------------------------------------------------
+   DEV TOOLS — synthetic harness (kept reachable, visually de-emphasised; the
+   brief: a quiet "Dev tools" drawer, not removed). Dashed, muted, recessed.
+---------------------------------------------------------------------------- */
+.synthetic-harness {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 10px 16px;
+  background: var(--paper-3);
+  border: 1.5px dashed var(--ink-3);
+  border-radius: var(--r);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-3);
+  opacity: 0.82;
+}
+.synthetic-harness:hover,
+.synthetic-harness:focus-within {
+  opacity: 1;
+}
+.synthetic-harness label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.synthetic-harness input[type='range'] {
+  accent-color: var(--blue);
+}
+.synthetic-title {
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-2);
+}
+.synthetic-random {
+  margin-left: auto;
+}
+
+/* ----------------------------------------------------------------------------
+   STAGE / SHEET  (App.tsx: staff-area = the engraved "sheet" panel)
+   OSMD renders BLACK notation, so the sheet must stay a light bone panel.
+---------------------------------------------------------------------------- */
 .staff-area {
   position: relative; /* anchors the count-in overlay */
-  background: #f6f7f9;
-  border-radius: 8px;
-  padding: 12px;
+  background: var(--paper-2);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r);
+  padding: 18px 18px 12px;
   overflow-x: auto;
 }
 
-/* ---- Count-in visual (Item 3): a prominent overlay over the staff during the
-   2-bar count-in. Disappears the instant the line starts (phase !== countIn). */
+/* "take" tab tape on the sheet, echoing the design .sheet .tape */
+.staff-area::before {
+  content: '★ FIRST READ';
+  position: absolute;
+  top: -11px;
+  left: 18px;
+  z-index: 2;
+  background: var(--flux);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  padding: 3px 8px;
+  transform: rotate(-1.4deg);
+  box-shadow: 2px 2px 0 var(--ink);
+  pointer-events: none;
+}
+
+.osmd-wrap {
+  position: relative;
+}
+
+.osmd-container {
+  min-height: 180px;
+}
+
+/* OSMD-rendered SVG: keep it crisp on the bone sheet. */
+.osmd-container svg {
+  max-width: none;
+}
+
+/* Read-ahead dim band (imperatively sized via setReadAheadDim). Feathered so it
+   isn't a hard wall; tuned to the bone sheet rather than the old grey. */
+.osmd-readahead-dim {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  pointer-events: none;
+  transition: opacity 120ms linear;
+  background: linear-gradient(
+    to right,
+    rgba(243, 239, 228, 0.62) 0%,
+    rgba(243, 239, 228, 0.5) 85%,
+    rgba(243, 239, 228, 0) 100%
+  );
+}
+
+/* ----------------------------------------------------------------------------
+   COUNT-IN OVERLAY  (over the sheet during the count-in)
+---------------------------------------------------------------------------- */
 .countin-overlay {
   position: absolute;
   inset: 0;
@@ -146,27 +743,30 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 12px;
-  background: rgba(21, 23, 28, 0.82);
-  border-radius: 8px;
+  gap: 14px;
+  background: rgba(20, 18, 16, 0.84);
+  border-radius: var(--r);
   z-index: 5;
   pointer-events: none;
 }
 
 .countin-label {
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0.22em;
   text-transform: uppercase;
-  color: var(--accent);
+  color: var(--paper);
 }
 
 .countin-number {
+  font-family: var(--disp);
   font-size: 120px;
-  font-weight: 800;
+  font-weight: 900;
   line-height: 1;
-  color: #ffd166;
-  /* Re-keyed each beat (key={countInBeat}) so this pulse re-fires per number. */
+  letter-spacing: -0.04em;
+  color: var(--flux);
+  /* re-keyed each beat so this pulse re-fires per number */
   animation: countin-pulse 0.45s ease-out;
 }
 
@@ -191,81 +791,50 @@ body {
 }
 
 .countin-dot {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   border-radius: 50%;
-  background: #3a3f47;
-  transition: background 80ms linear, transform 80ms linear;
+  background: #4a463f;
+  transition:
+    background 80ms linear,
+    transform 80ms linear;
 }
 
 .countin-dot.is-current {
-  background: #ffd166;
+  background: var(--flux);
   transform: scale(1.35);
 }
 
-/* "Hear line" transport toggle (Item 2). */
-.hear-line {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  color: var(--muted);
+/* ----------------------------------------------------------------------------
+   STATUS / PHASE LINE  (App.tsx: phase-line, persist-status)
+---------------------------------------------------------------------------- */
+.phase-line {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+.phase-line strong {
+  color: var(--ink);
+}
+.persist-status {
+  color: var(--ink-3);
 }
 
-/* Detector A/B picker (pitchy | CREPE) — disabled while a take runs. */
-.detector-picker {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 14px;
-  color: var(--muted);
-}
-.detector-picker select {
-  font: inherit;
-}
-.detector-fallback {
-  color: #f08c00; /* warn amber: CREPE fell back to pitchy this take */
-}
-.review-detector {
-  color: var(--text, inherit);
-}
-
-.osmd-wrap {
-  position: relative;
-}
-
-.osmd-container {
-  min-height: 180px;
-}
-
-/* Read-ahead dim (brief section 13): a translucent band over the already-read
-   region behind the cursor, with a soft feathered right edge so it isn't a hard
-   wall. Sized/shown imperatively (setReadAheadDim); pointer-events off so it
-   never blocks the staff. */
-.osmd-readahead-dim {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  pointer-events: none;
-  transition: opacity 120ms linear;
-  background: linear-gradient(
-    to right,
-    rgba(246, 247, 249, 0.55) 0%,
-    rgba(246, 247, 249, 0.45) 85%,
-    rgba(246, 247, 249, 0) 100%
-  );
-}
-
+/* ----------------------------------------------------------------------------
+   TIMING READOUT  (TimingReadout.tsx — evidence panel; phase-* + dev pass/fail)
+---------------------------------------------------------------------------- */
 .timing-readout {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 8px 24px;
-  padding: 12px 16px;
-  background: #1b1e25;
-  border: 1px solid #2a2e36;
-  border-radius: 8px;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
+  padding: 14px 18px;
+  background: var(--paper-2);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r);
+  font-family: var(--mono);
   font-size: 13px;
 }
 
@@ -274,304 +843,443 @@ body {
   justify-content: space-between;
   gap: 12px;
 }
-
 .readout-label {
-  color: var(--muted);
+  color: var(--ink-3);
 }
-
 .readout-value {
-  font-weight: 600;
+  font-weight: 500;
+  color: var(--ink);
 }
 
+.phase-idle {
+  color: var(--ink-3);
+}
 .phase-countIn {
-  color: #ffd166;
+  color: var(--flux);
 }
 .phase-playing {
-  color: #4f9cff;
+  color: var(--blue);
 }
 .phase-finished {
-  color: #8ce99a;
+  color: var(--ok);
 }
 
 .dev-pass {
-  color: #8ce99a;
+  color: var(--ok);
 }
 .dev-fail {
-  color: #ff6b6b;
+  color: var(--flux);
 }
 
-/* ---- Milestone 4: device picker, headphone tip, synthetic harness, results ---- */
-
-.btn-small {
-  padding: 6px 10px;
-  font-size: 13px;
-}
-
-.headphone-tip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 10px 16px;
-  background: #2a2410;
-  border: 1px solid #5a4d18;
-  border-radius: 8px;
-  color: #ffd166;
-  font-size: 14px;
-}
-
-.device-picker {
-  display: flex;
-  align-items: flex-end;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 12px 16px;
-  background: #1b1e25;
-  border: 1px solid #2a2e36;
-  border-radius: 8px;
-}
-
-.device-picker label {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.device-picker select {
-  font: inherit;
-  padding: 6px 8px;
-  background: #11141a;
-  color: var(--fg);
-  border: 1px solid #2a2e36;
-  border-radius: 6px;
-  min-width: 220px;
-}
-
-.device-warn {
-  color: #ff6b6b;
-  font-size: 13px;
-}
-
-.detected-count {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.synthetic-harness {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 10px 16px;
-  background: #161a22;
-  border: 1px dashed #3a3f47;
-  border-radius: 8px;
-  font-size: 13px;
-  color: var(--muted);
-}
-
-.synthetic-harness label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.synthetic-title {
-  font-weight: 600;
-  color: var(--fg);
-}
-
-.synthetic-random {
-  margin-left: auto;
-}
-
-.phase-line {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 13px;
-  color: var(--muted);
-}
-
+/* ----------------------------------------------------------------------------
+   RESULTS SCREEN  (ResultsScreen.tsx — design .res block)
+---------------------------------------------------------------------------- */
 .results-screen {
-  padding: 20px 24px;
-  background: #1b1e25;
-  border: 1px solid #2a2e36;
-  border-radius: 8px;
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 18px;
+  padding: 22px 22px 22px;
+  background: var(--paper-2);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r);
 }
 
 .results-header {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
 }
-
 .results-header h2 {
-  margin: 0;
+  font-size: 30px;
+  text-transform: uppercase;
 }
-
 .results-attempt {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 13px;
-  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
 }
 
+/* big metrics (design .bigmetric) — pitch=blue, timing=flux */
 .results-metrics {
-  display: flex;
-  gap: 24px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 620px) {
+  .results-metrics {
+    grid-template-columns: 1fr;
+  }
 }
 
 .metric {
-  flex: 1;
-  text-align: center;
-  padding: 16px;
-  border-radius: 8px;
-  background: #11141a;
-  border: 1px solid #2a2e36;
+  border: 1.5px solid var(--ink);
+  background: var(--paper);
+  border-radius: var(--r);
+  padding: 18px 20px;
 }
-
 .metric-value {
-  font-size: 40px;
-  font-weight: 800;
+  font-family: var(--disp);
+  font-weight: 900;
+  font-size: 64px;
+  line-height: 0.85;
+  letter-spacing: -0.04em;
 }
-
 .metric-pitch .metric-value {
-  color: #4f9cff;
+  color: var(--blue);
 }
 .metric-timing .metric-value {
-  color: #8ce99a;
+  color: var(--flux);
 }
-
 .metric-label {
-  font-size: 14px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-top: 10px;
+}
+.metric-sub {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-2);
   margin-top: 4px;
 }
 
-.metric-sub {
-  font-size: 12px;
-  color: var(--muted);
-  margin-top: 2px;
-}
-
+/* breakdown chips (design .ch family) */
 .results-breakdown {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
 }
-
 .chip {
-  padding: 4px 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 5px 11px;
   border-radius: 999px;
-  font-size: 13px;
-  font-weight: 600;
+  color: #fff;
 }
-
 .chip-hit {
-  background: #133a24;
-  color: #8ce99a;
+  background: var(--blue);
 }
 .chip-wrong {
-  background: #3a1414;
-  color: #ff8787;
+  background: var(--flux);
 }
 .chip-late {
-  background: #3a2e14;
-  color: #ffd166;
+  background: var(--warn);
 }
 .chip-missed {
-  background: #25282e;
-  color: #9aa0a6;
+  background: var(--ink-3);
 }
 .chip-extra {
-  background: #1f2433;
-  color: #748ffc;
+  background: transparent;
+  color: var(--blue);
+  border: 1.5px solid var(--blue);
 }
 
 .results-config {
   display: flex;
   gap: 8px;
-  color: var(--muted);
-  font-size: 14px;
+  flex-wrap: wrap;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-2);
 }
 
 .results-actions {
   display: flex;
+  align-items: center;
   gap: 12px;
-  align-items: center;
+  flex-wrap: wrap;
+  border-top: 1.5px solid var(--ink);
+  padding-top: 18px;
 }
 
-/* --- Milestone 5: view switcher + stats view ----------------------------- */
-
-.view-switch {
+/* ----------------------------------------------------------------------------
+   DETECTION REVIEW  (DetectionReview.tsx — design .res note table + graph)
+   This is a Gate-3 accuracy/dev tool: kept reachable, recessed panel.
+---------------------------------------------------------------------------- */
+.detection-review {
+  margin-top: 4px;
+  padding: 18px;
+  background: var(--paper-3);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r);
   display: flex;
-  gap: 6px;
-  align-items: center;
-}
-.btn.is-active {
-  background: var(--accent);
-  color: #06121f;
-  font-weight: 600;
+  flex-direction: column;
+  gap: 20px;
 }
 
+.review-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.review-header h3 {
+  font-size: 18px;
+  text-transform: uppercase;
+}
+.review-mode {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-3);
+}
+.review-detector {
+  color: var(--blue);
+  font-weight: 500;
+}
+
+.review-section h4 {
+  margin: 0 0 10px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.review-section h5 {
+  margin: 14px 0 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--ink-2);
+}
+.review-empty {
+  font-family: var(--mono);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--ink-3);
+}
+
+/* per-note table (design table.notes) */
+.review-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.review-table th {
+  text-align: left;
+  color: var(--ink-3);
+  font-weight: 500;
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  border-bottom: 1.5px solid var(--ink);
+  padding: 4px 10px 6px;
+}
+.review-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.review-cell-index {
+  color: var(--ink-3);
+}
+.review-cell-num {
+  text-align: right;
+}
+.review-table th:nth-child(4),
+.review-table th:nth-child(5) {
+  text-align: right;
+}
+
+/* row tints — mirror the staff/feedback palette (design .row-*) */
+.review-row-wrong_pitch {
+  background: rgba(255, 91, 31, 0.1);
+}
+.review-row-late {
+  background: rgba(224, 144, 58, 0.12);
+}
+.review-row-missed {
+  color: var(--ink-3);
+  background: rgba(138, 132, 120, 0.07);
+}
+.review-row-octave {
+  outline: 1px dashed rgba(29, 61, 240, 0.5);
+  outline-offset: -1px;
+}
+
+.review-octave-flag {
+  color: var(--blue);
+  font-weight: 500;
+  font-size: 11px;
+}
+.review-class-pill {
+  font-weight: 500;
+}
+
+.review-extras {
+  margin-top: 2px;
+}
+.review-extras-sub {
+  color: var(--ink-3);
+  font-weight: 400;
+  font-size: 11px;
+}
+.review-table-extras {
+  width: auto;
+}
+.review-row-extra {
+  background: rgba(29, 61, 240, 0.07);
+}
+
+/* pitch-vs-time graph (design .graph + glegend) */
+.review-graph-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.review-graph {
+  width: 100%;
+  max-width: 720px;
+  background: var(--paper-2);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r);
+}
+.review-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.review-axis-label {
+  fill: var(--ink-3);
+  font-size: 9px;
+  font-family: var(--mono);
+}
+.review-expected-bar {
+  stroke: var(--blue);
+  stroke-width: 4;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+.review-trace {
+  fill: none;
+  stroke: var(--ok);
+  stroke-width: 1.5;
+  opacity: 0.85;
+}
+.review-detected-dot {
+  fill: var(--flux);
+  stroke: var(--paper-2);
+  stroke-width: 0.75;
+}
+
+.review-graph-legend {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-2);
+}
+.review-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.review-legend-bar {
+  display: inline-block;
+  width: 16px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--blue);
+  opacity: 0.55;
+}
+.review-legend-trace {
+  display: inline-block;
+  width: 16px;
+  height: 2px;
+  background: var(--ok);
+}
+.review-legend-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--flux);
+}
+
+/* audio playback (design .audio) */
+.review-audio-player {
+  width: 100%;
+  max-width: 480px;
+  margin-top: 4px;
+}
+
+/* ----------------------------------------------------------------------------
+   STATS VIEW  (StatsView.tsx — design .prog block)
+---------------------------------------------------------------------------- */
 .stats-view {
   display: flex;
   flex-direction: column;
   gap: 18px;
-  padding: 8px 0;
+  padding: 8px 0 0;
 }
 .stats-header h2 {
-  margin: 0;
+  font-size: 30px;
+  text-transform: uppercase;
 }
 .stats-warning {
-  background: #2a2410;
-  border: 1px solid #5c4d12;
-  color: #d9c98a;
-  padding: 10px 12px;
-  border-radius: 6px;
+  background: var(--paper-2);
+  border: 1.5px dashed var(--ink);
+  border-radius: var(--r);
+  color: var(--ink-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  padding: 11px 14px;
 }
 .stats-empty {
-  color: var(--muted);
+  font-family: var(--mono);
   font-style: italic;
+  color: var(--ink-3);
 }
 .stats-filters {
   display: flex;
   gap: 16px;
-  align-items: center;
+  align-items: flex-end;
   flex-wrap: wrap;
 }
-.stats-filters label {
-  display: flex;
-  flex-direction: column;
-  font-size: 12px;
-  color: var(--muted);
-  gap: 4px;
-}
 .stats-loading {
-  color: var(--muted);
+  font-family: var(--mono);
   font-size: 12px;
+  color: var(--ink-3);
+  align-self: center;
 }
+
+/* chart / heatmap panels (design .panel) */
 .stats-panel {
-  background: #1b1e25;
-  border: 1px solid #2a2f3a;
-  border-radius: 8px;
-  padding: 12px 16px;
+  background: var(--paper-2);
+  border: 1.5px solid var(--ink);
+  border-radius: var(--r);
+  padding: 16px 18px;
 }
 .stats-panel h3 {
-  margin: 0 0 8px;
-  font-size: 15px;
+  margin: 0 0 12px;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-3);
 }
 .stats-chart {
   display: block;
-  background: #121419;
-  border-radius: 6px;
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
 }
 .stats-legend {
   margin-top: 8px;
-  font-size: 12px;
-  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-2);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -584,9 +1292,11 @@ body {
   vertical-align: middle;
 }
 
+/* missed-note heatmap (design .heat2) */
 .heatmap {
   display: flex;
   flex-direction: column;
+  font-family: var(--mono);
   font-size: 13px;
   font-variant-numeric: tabular-nums;
 }
@@ -596,11 +1306,11 @@ body {
   align-items: center;
 }
 .heatmap-head {
-  color: var(--muted);
-  font-size: 11px;
+  color: var(--ink-3);
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid #2a2f3a;
+  letter-spacing: 0.06em;
+  border-bottom: 1.5px solid var(--ink);
   padding-bottom: 4px;
   margin-bottom: 4px;
 }
@@ -610,208 +1320,32 @@ body {
 }
 .heatmap-cell.pitch {
   text-align: left;
-  font-weight: 600;
+  font-weight: 500;
+  color: var(--ink);
 }
 .heatmap-cell.heat {
   text-align: center;
   border-radius: 3px;
-  color: #06121f;
-  font-weight: 600;
+  color: #fff;
+  font-weight: 500;
 }
 
-/* --- Detection review (post-take Gate-3 accuracy tool) ------------------- */
-
-.detection-review {
-  margin-top: 8px;
-  padding: 16px;
-  background: #11141a;
-  border: 1px solid #2a2f3a;
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 18px;
-}
-
-.review-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.review-header h3 {
-  margin: 0;
-  font-size: 16px;
-}
-.review-mode {
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.review-section h4 {
-  margin: 0 0 8px;
-  font-size: 14px;
-  color: var(--fg);
-}
-.review-section h5 {
-  margin: 12px 0 6px;
-  font-size: 13px;
-  color: var(--fg);
-}
-.review-empty {
-  color: var(--muted);
-  font-style: italic;
-  font-size: 13px;
-}
-
-/* Per-note table */
-.review-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-  font-size: 13px;
-  font-variant-numeric: tabular-nums;
-}
-.review-table th {
-  text-align: left;
-  color: var(--muted);
-  font-weight: 600;
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  border-bottom: 1px solid #2a2f3a;
-  padding: 4px 10px 6px;
-}
-.review-table td {
-  padding: 4px 10px;
-  border-bottom: 1px solid #1c2029;
-}
-.review-cell-index {
-  color: var(--muted);
-}
-.review-cell-num {
-  text-align: right;
-}
-.review-table th:nth-child(4),
-.review-table th:nth-child(5) {
-  text-align: right;
-}
-
-/* Row tints so wrong / late rows are easy to scan. Mirrors the staff colours. */
-.review-row-wrong_pitch {
-  background: rgba(224, 49, 49, 0.12);
-}
-.review-row-late {
-  background: rgba(255, 209, 102, 0.1);
-}
-.review-row-missed {
-  color: var(--muted);
-  background: rgba(154, 160, 166, 0.07);
-}
-.review-row-octave {
-  outline: 1px dashed rgba(116, 143, 252, 0.5);
-  outline-offset: -1px;
-}
-
-.review-octave-flag {
-  color: #748ffc;
-  font-weight: 700;
-  font-size: 11px;
-}
-.review-class-pill {
-  font-weight: 700;
-}
-
-.review-extras-sub {
-  color: var(--muted);
-  font-weight: 400;
-  font-size: 11px;
-}
-.review-table-extras {
-  width: auto;
-}
-.review-row-extra {
-  background: rgba(116, 143, 252, 0.08);
-}
-
-/* Pitch-vs-time graph */
-.review-graph-wrap {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-.review-graph {
-  width: 100%;
-  max-width: 720px;
-  background: #0c0e13;
-  border: 1px solid #2a2f3a;
-  border-radius: 6px;
-}
-.review-grid {
-  stroke: #21262f;
-  stroke-width: 1;
-}
-.review-axis-label {
-  fill: var(--muted);
-  font-size: 9px;
-  font-family: ui-monospace, "SF Mono", Menlo, monospace;
-}
-.review-expected-bar {
-  stroke: #4f9cff;
-  stroke-width: 4;
-  stroke-linecap: round;
-  opacity: 0.55;
-}
-.review-trace {
-  fill: none;
-  stroke: #8ce99a;
-  stroke-width: 1.5;
-  opacity: 0.9;
-}
-.review-detected-dot {
-  fill: #ffd166;
-  stroke: #11141a;
-  stroke-width: 0.75;
-}
-
-.review-graph-legend {
-  display: flex;
-  gap: 18px;
-  flex-wrap: wrap;
-  font-size: 12px;
-  color: var(--muted);
-}
-.review-legend-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.review-legend-bar {
-  display: inline-block;
-  width: 18px;
-  height: 4px;
-  border-radius: 2px;
-  background: #4f9cff;
-  opacity: 0.55;
-}
-.review-legend-trace {
-  display: inline-block;
-  width: 18px;
-  height: 2px;
-  background: #8ce99a;
-}
-.review-legend-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #ffd166;
-}
-
-/* Audio playback */
-.review-audio-player {
-  width: 100%;
-  max-width: 480px;
-  margin-top: 4px;
+/* ----------------------------------------------------------------------------
+   REDUCED MOTION
+---------------------------------------------------------------------------- */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  .countin-number {
+    animation: none;
+  }
+  .reveal {
+    animation: none;
+    opacity: 1;
+  }
+  .btn,
+  .btn-primary {
+    transition: none;
+  }
 }
