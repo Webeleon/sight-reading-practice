@@ -15,13 +15,16 @@ the results add up. This document says **where the project is** and **what's lef
 | **Prototype app** (Electron) | ✅ Working, all tests green | Milestones 1–5 complete; Gates 1–3 cleared; **Gate 4 (human) pending** |
 | **App redesign** ("Signal Tape") | ✅ Shipped | Full-bleed UI; behaviour preserved; `npm run verify` + `build` green |
 | **Landing page** (Next.js) | ✅ Built, ⛔ not deployed | Email-gated download; needs Vercel deploy + real email backend |
-| **Downloadable demo** (the thing the landing links to) | ⛔ **Not built** | No packaging config yet → **no GitHub Release exists** |
+| **Packaging + release** | ✅ Config + CI ready, ⛔ not yet tagged | `electron-builder` + GitHub Actions; push a `v*` tag → macOS/Windows/Linux installers → GitHub Release (see `RELEASE.md`) |
 | **Design reference + palette** | ✅ Done | `design/` (mockups, system, palette PNG/HTML/MD) |
 | **Native Swift rewrite** (the eventual goal) | ⬜ Not started | This prototype exists to de-risk it |
 
-**The single most important open item for the market test:** there is no packaged
-app to download. The landing's CTA points at `…/releases/latest`, which does not
-exist. See **What's left → 1**.
+**The single most important open item for the market test:** cut the first
+release. Packaging + a GitHub Actions release workflow now exist
+(`electron-builder.yml` + `.github/workflows/release.yml`); pushing a `v*` tag
+builds macOS/Windows/Linux installers and publishes them to a GitHub Release. No
+tag has been pushed yet, so the landing's CTA (`…/releases/latest`) 404s until the
+first release. See **What's left → 1** and `RELEASE.md`.
 
 ---
 
@@ -147,15 +150,18 @@ npm run lint           # eslint .
 
 ## What's left to do
 
-### 1. ⛔ Package the app + publish a GitHub Release  — _critical path for the market test_
-The landing offers a download, but **there is no packaged binary and no release**.
-There is **no packaging config** (no electron-builder / electron-forge).
-- Add `electron-builder` (or Forge): macOS (arm64 + x64) `.dmg`/`.zip`, Windows
-  `.exe`. Note the renderer bundles ~5 MB JS (tfjs + OSMD) + the CREPE model
-  (`src/ui/public/models/crepe/*`, ~1.9 MB) — make sure the model ships in the
-  package and loads from the packaged path.
-- Cut a **GitHub Release**; set the landing's `NEXT_PUBLIC_RELEASES_URL` to it.
-- Code-signing/notarization (macOS) is unsolved — without it users hit Gatekeeper.
+### 1. ✅ Packaging + release workflow exist — _cut the first release to finish the critical path_
+Packaging is now configured: **`electron-builder.yml`** (asar off, `node_modules`
+excluded → ~7 MB app payload; the CREPE model + migration SQL ship and resolve
+from the packaged path — **verified by launching the packaged `.app`**) plus a
+**`.github/workflows/release.yml`** pipeline (push a `v*` tag → `test` gate →
+build macOS arm64+x64 / Windows / Linux → publish one GitHub Release). The
+landing's release URL is fixed to the real remote `Webeleon/sight-reading-practice`.
+- **Remaining:** bump `package.json` version → push a matching `v*` tag (see
+  `RELEASE.md`), then optionally set the landing's `NEXT_PUBLIC_RELEASES_URL`.
+- Builds are **unsigned** for now (macOS ad-hoc) — testers do a one-time
+  Gatekeeper bypass, which the release notes document. Apple **notarization is
+  deferred** (would need a paid Developer account + cert secrets).
 
 ### 2. Deploy the landing (Vercel) + wire real email capture
 - Vercel project → **Root Directory = `landing`**.

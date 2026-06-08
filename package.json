@@ -1,9 +1,10 @@
 {
   "name": "sight-reading-guitar-practice",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "description": "Throwaway Electron+TypeScript prototype for a guitar sight-reading practice tool",
+  "author": "webeleon <julien@webeleon.dev>",
   "main": "dist-electron/main/main.mjs",
   "scripts": {
     "dev": "electron-vite dev",
@@ -14,7 +15,11 @@
     "typecheck": "tsc -p tsconfig.pure.json --noEmit && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.ui.json --noEmit",
     "verify:purity": "bash scripts/check-purity.sh",
     "verify:property": "vitest run src/generator/property.test.ts",
-    "generate:batch": "node --import tsx src/cli/generateBatch.ts"
+    "generate:batch": "node --import tsx src/cli/generateBatch.ts",
+    "package": "npm run build && electron-builder",
+    "package:mac": "npm run build && electron-builder --mac",
+    "package:win": "npm run build && electron-builder --win",
+    "package:linux": "npm run build && electron-builder --linux"
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.22.0",
@@ -32,6 +37,7 @@
     "@vitejs/plugin-react": "^6.0.2",
     "@vitest/coverage-v8": "^4.1.8",
     "electron": "^42.3.3",
+    "electron-builder": "^26.15.2",
     "electron-vite": "^5.0.0",
     "happy-dom": "^20.10.1",
     "tsx": "^4.22.4",

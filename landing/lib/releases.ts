@@ -9,16 +9,16 @@
  *      server and client. Set this in production.
  *   2. RELEASES_FALLBACK_URL    — the constant below.
  *
- * NOTE on the slug: the repo is not yet public (no git remote is configured to
- * confirm the canonical slug). The fallback is aligned to the project directory
- * name `sight-reading-guitar-practice` under the `webeleon` org. When the public
- * repo exists, set NEXT_PUBLIC_RELEASES_URL (or update this constant) to the
- * confirmed URL — that is the only place the slug lives.
+ * NOTE on the slug: confirmed against the git remote — the canonical repo is
+ * `Webeleon/sight-reading-practice`, which is where the release workflow
+ * (.github/workflows/release.yml) publishes installers. Override with
+ * NEXT_PUBLIC_RELEASES_URL if releases ever move; that is the only other place
+ * the slug lives.
  */
 
 /** The canonical GitHub Releases page used when no env override is set. */
 export const RELEASES_FALLBACK_URL =
-  "https://github.com/webeleon/sight-reading-guitar-practice/releases/latest";
+  "https://github.com/Webeleon/sight-reading-practice/releases/latest";
 
 /**
  * The releases/download URL, honouring the NEXT_PUBLIC_RELEASES_URL override.
@@ -34,7 +34,7 @@ export function getReleasesUrl(): string {
  *  releases URL, so it tracks the single source of truth. Override with
  *  NEXT_PUBLIC_REPO_URL when the canonical slug is confirmed. */
 export const REPO_FALLBACK_URL =
-  "https://github.com/webeleon/sight-reading-guitar-practice";
+  "https://github.com/Webeleon/sight-reading-practice";
 
 export function getRepoUrl(): string {
   return process.env.NEXT_PUBLIC_REPO_URL || REPO_FALLBACK_URL;

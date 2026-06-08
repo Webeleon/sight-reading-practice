@@ -1,0 +1,75 @@
+# electron-builder packaging config.
+#
+# Pairs with electron-vite: `npm run build` first emits the bundles into
+# dist-electron/{main,preload,renderer}, then electron-builder packages them.
+# See package.json scripts: `package`, `package:mac|win|linux`.
+#
+# Releasing is driven by .github/workflows/release.yml (push a `v*` tag), NOT by
+# electron-builder's own publisher — hence no `publish:` block here. Auto-update
+# is intentionally out of scope for this prototype.
+
+appId: dev.webeleon.sight-reading
+productName: Sight Reading
+
+directories:
+  output: release
+  buildResources: build # optional icon.icns / icon.png / icon.ico live here; default
+                        # Electron icons are used (with a warning) until added.
+
+# Throwaway prototype: disabling asar keeps the CREPE model and the on-disk
+# migrations as plain files, sidestepping every asar fetch/fs edge case. A
+# production build would re-enable asar and `asarUnpack` the model instead.
+asar: false
+
+# No native modules (persistence uses Node's built-in node:sqlite), so there is
+# nothing to rebuild against Electron's ABI.
+npmRebuild: false
+
+# Explicit allowlist — the renderer/main/preload are already bundled, so we ship
+# only the build output plus the migration SQL the main process reads from disk
+# at runtime (electron/main.ts -> resolveMigrationsDir). This excludes landing/,
+# design/, out/, src/**/*.ts and tests, keeping the package lean.
+files:
+  - dist-electron/**
+  - src/persistence/migrations/**/*.sql
+  - package.json
+  # Exclude node_modules entirely: the renderer is fully bundled by Vite and the
+  # main process imports only `electron` + node: built-ins (verified — no bare
+  # third-party imports in dist-electron/main). This drops the package from
+  # ~640 MB to a few MB. If a runtime `Cannot find module` ever appears, add that
+  # one package back here instead of removing this line.
+  - '!node_modules/**'
+
+mac:
+  # Architectures are set per-target (there is no top-level `mac.arch`). Both the
+  # Apple-Silicon (arm64) and Intel (x64) slices are built from one runner.
+  target:
+    - target: dmg
+      arch:
+        - arm64
+        - x64
+    - target: zip
+      arch:
+        - arm64
+        - x64
+  category: public.app-category.music
+  # Unsigned / ad-hoc only for now. The app runs after a one-time Gatekeeper
+  # bypass (right-click -> Open, or `xattr -cr`). Notarization is a later step.
+  identity: null
+
+win:
+  target: nsis
+  executableName: SightReading
+
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-${version}-setup.${ext}
+
+linux:
+  target:
+    - AppImage
+    - deb
+  category: Education
+  maintainer: webeleon <julien@webeleon.dev>
