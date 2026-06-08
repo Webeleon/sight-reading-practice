@@ -28,6 +28,9 @@ export function EmailGate({ variant = "light" }: EmailGateProps) {
   const isDark = variant === "dark";
 
   const [email, setEmail] = useState("");
+  // Honeypot — must stay empty for real users; bots that fill it are dropped
+  // server-side. Never rendered visibly (see the hidden input below).
+  const [company, setCompany] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
@@ -51,7 +54,7 @@ export function EmailGate({ variant = "light" }: EmailGateProps) {
       const res = await fetch("/api/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: value, source: variant }),
+        body: JSON.stringify({ email: value, source: variant, company }),
       });
       const data = (await res.json().catch(() => null)) as
         | { ok: boolean; downloadUrl?: string; error?: string }
@@ -97,6 +100,23 @@ export function EmailGate({ variant = "light" }: EmailGateProps) {
         {isDark ? "Email me the demo" : "Get the demo"}
       </div>
       <form className={styles.form} onSubmit={handleSubmit} noValidate>
+        {/* Honeypot: off-screen, not focusable, hidden from AT. Leave empty. */}
+        <input
+          type="text"
+          name="company"
+          tabIndex={-1}
+          autoComplete="off"
+          aria-hidden="true"
+          value={company}
+          onChange={(e) => setCompany(e.target.value)}
+          style={{
+            position: "absolute",
+            left: "-9999px",
+            width: 1,
+            height: 1,
+            opacity: 0,
+          }}
+        />
         <input
           id={inputId}
           type="email"

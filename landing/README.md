@@ -53,20 +53,37 @@ npm run start
 
 ## Email capture (the pseudo-backend)
 
-`POST /api/subscribe` with `{ "email": "you@guitar.com", "source": "light" }`.
+`POST /api/subscribe` with
+`{ "email": "you@guitar.com", "source": "light", "company": "" }`.
 
 - On success it **always** returns `{ ok: true, downloadUrl }`, where
   `downloadUrl = process.env.RELEASES_URL` or a GitHub Releases placeholder.
 - On an invalid email it returns `400 { ok: false, error }`.
 - It never throws an unhandled error — failures surface as JSON, and the user
   still receives a download link.
+- `company` is a **honeypot**: real users leave it empty (it's an off-screen,
+  non-focusable field in `EmailGate`). A non-empty value is treated as a bot —
+  the API returns the normal success JSON but records/sends nothing. This guards
+  the endpoint from being abused as a spam relay, since it emails arbitrary
+  submitted addresses.
 
-`lib/subscribers.ts` picks a storage strategy at runtime, in priority order:
+On each valid signup the API sends **two emails via [Resend](https://resend.com)**
+(`sendLeadNotification` + `sendDownloadEmail` in `lib/subscribers.ts`, both
+require `RESEND_API_KEY` + `RESEND_FROM`):
+
+1. a **lead notification** to `SUBSCRIBE_NOTIFY_TO` (default `julien@webeleon.dev`,
+   reply-to = the lead) so you receive every signup, and
+2. the **download link** to the visitor — which is what the "Check your inbox"
+   success state promises.
+
+It also calls `recordSubscriber()`, which keeps a runtime storage strategy in
+priority order (useful as a secondary record or instead of the notification
+email):
 
 1. **`SUBSCRIBE_WEBHOOK_URL`** — POSTs `{ email, source, ts }` to your webhook
    (Zapier / Make / your own endpoint).
-2. **`RESEND_API_KEY` + `RESEND_AUDIENCE_ID`** — adds the contact to a
-   [Resend](https://resend.com) audience.
+2. **`RESEND_API_KEY` + `RESEND_AUDIENCE_ID`** — adds the contact to a Resend
+   audience (an exportable list for a launch blast).
 3. **Fallback** — `console.log`, and **in development only**, appends to
    `.emails.local.json` (git-ignored).
 
@@ -78,14 +95,20 @@ Copy `.env.example` to `.env.local` and fill in what you need:
 | -------------------------- | -------- | ------------------------------------------------------ |
 | `NEXT_PUBLIC_RELEASES_URL` | no\*     | Public GitHub Releases / download URL. Read by both the client link and the subscribe API (single source of truth, `lib/releases.ts`). Defaults to a placeholder — **set this** before launch. |
 | `RELEASES_URL`             | no       | Server-only override for the emailed/returned download link; takes precedence over `NEXT_PUBLIC_RELEASES_URL` for the API response. |
-| `SUBSCRIBE_WEBHOOK_URL`    | no       | Forward captured emails to a webhook.                  |
-| `RESEND_API_KEY`           | no       | Resend API key (used with the audience id).            |
-| `RESEND_AUDIENCE_ID`       | no       | Resend audience to add contacts to.                    |
+| `RESEND_API_KEY`           | no\*\*   | Resend API key. Needed to send any email (lead notification + visitor download link). |
+| `RESEND_FROM`              | no\*\*   | Verified sender, e.g. `"Sight Reading <hello@webeleon.dev>"`. Needed to send. Use `onboarding@resend.dev` for local testing. |
+| `SUBSCRIBE_NOTIFY_TO`      | no       | Where lead notifications go. Defaults to `julien@webeleon.dev`. |
+| `SUBSCRIBE_WEBHOOK_URL`    | no       | Forward captured emails to a webhook (alternative sink in `recordSubscriber`). |
+| `RESEND_AUDIENCE_ID`       | no       | If set with `RESEND_API_KEY`, also adds contacts to a Resend audience. |
 
 \* Not required to run, but you'll want a real release URL in production. The
 fallback slug in `lib/releases.ts` tracks the project directory name
 (`webeleon/sight-reading-guitar-practice`); confirm/update it when the public
 repo exists.
+
+\*\* Not required to run, but **without `RESEND_API_KEY` + `RESEND_FROM` no
+emails are sent** — neither you nor the visitor receives anything, and the
+"Check your inbox" copy would be untrue. Set both before launch.
 
 ## Deploy on Vercel
 
@@ -98,14 +121,18 @@ repo exists.
 
 ### Production wiring (read before launch)
 
-> **Vercel's serverless filesystem is read-only at runtime**, so the
-> `.emails.local.json` fallback is **development-only** and will not persist
-> anything in production. Pick a real sink:
+> **The default path is email** (`lib/subscribers.ts`): set `RESEND_API_KEY` +
+> `RESEND_FROM` (and optionally `SUBSCRIBE_NOTIFY_TO`) and every signup emails
+> you the lead **and** emails the visitor their download link. Verify a sending
+> domain in Resend for good deliverability (`onboarding@resend.dev` works for
+> testing but only sends to your own Resend account email).
 >
-> - **Resend** (simplest for an email list): set `RESEND_API_KEY` +
->   `RESEND_AUDIENCE_ID`. `lib/subscribers.ts` already calls the audiences API;
->   to actually *email* the download link, add a `resend.emails.send(...)` call
->   in the Resend branch.
+> **Vercel's serverless filesystem is read-only at runtime**, so the
+> `.emails.local.json` fallback in `recordSubscriber()` is **development-only**
+> and persists nothing in production. If you also want a stored list, pick a sink:
+>
+> - **Resend audience** (exportable list for a launch blast): also set
+>   `RESEND_AUDIENCE_ID` — `recordSubscriber()` adds the contact (dedupes).
 > - **Vercel KV / Postgres** (own your data): add `@vercel/kv` or
 >   `@vercel/postgres`, then in `recordSubscriber()` replace the fallback branch
 >   with a `kv.sadd('subscribers', email)` (dedupes) or a `INSERT ... ON
@@ -113,5 +140,6 @@ repo exists.
 > - **Webhook**: set `SUBSCRIBE_WEBHOOK_URL` to hand off to any external system
 >   without adding a dependency.
 
-The capture function is intentionally small and pluggable — swap the fallback
-branch for your chosen backend and the rest of the app is untouched.
+The email senders and capture function are intentionally small — raw `fetch` to
+Resend, no SDK. Swap the storage branch for your chosen backend and the rest of
+the app is untouched.
