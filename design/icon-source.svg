@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024" role="img" aria-label="Sight Reading">
+  <!-- Sight Reading — app icon. "Signal Tape" system: bone canvas, ultramarine =
+       structure/data, flux orange = the live note only. Concept "Signal -> Note":
+       an input signal grows left->right and resolves into the live note. -->
+  <rect width="1024" height="1024" fill="#ECE7DA"/>
+
+  <g transform="translate(0 32)">
+    <!-- ultramarine baseline: the zero axis / staff line (structure/data) -->
+    <line x1="120" y1="620" x2="904" y2="620" stroke="#1D3DF0" stroke-width="16" stroke-linecap="round"/>
+
+    <!-- flux input signal: amplitude grows L->R, settling toward the note -->
+    <path d="M120 620 L206 552 L286 620 L380 446 L458 620 L562 286 L648 620"
+          fill="none" stroke="#FF5B1F" stroke-width="46" stroke-linejoin="round" stroke-linecap="round"/>
+
+    <!-- ink stem (notation structure) on the note's right -->
+    <rect x="838" y="350" width="22" height="270" fill="#141210"/>
+
+    <!-- flux notehead (the live note) resting on the baseline -->
+    <g transform="rotate(-20 776 620)"><ellipse cx="776" cy="620" rx="76" ry="55" fill="#FF5B1F"/></g>
+  </g>
+</svg>

@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Sight Reading — icon candidates</title>
+<style>
+@import url("https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600;800;900&family=DM+Mono:wght@400;500&display=swap");
+:root{
+  --paper:#ECE7DA; --paper-2:#F3EFE4; --paper-3:#E2DCCB;
+  --ink:#141210; --ink-2:#4A463F; --ink-3:#8A8478; --line:#CFC8B6;
+  --blue:#1D3DF0; --flux:#FF5B1F;
+  --disp:"Archivo",system-ui,sans-serif; --mono:"DM Mono",ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box;}
+body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--disp);
+  -webkit-font-smoothing:antialiased;}
+.grain::after{content:"";position:fixed;inset:0;pointer-events:none;z-index:50;
+  mix-blend-mode:multiply;opacity:.30;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");}
+
+header{max-width:1280px;margin:0 auto;padding:54px 40px 22px;}
+.kicker{font-family:var(--mono);font-size:12px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink-2);}
+.kicker .reg{color:var(--blue);}
+h1{font-weight:900;letter-spacing:-.035em;line-height:.92;font-size:62px;margin:.18em 0 .12em;}
+h1 em{font-style:normal;background:var(--flux);color:#fff;padding:0 .08em;}
+.sub{font-family:var(--mono);font-size:13px;color:var(--ink-2);max-width:60ch;line-height:1.6;}
+.rule{max-width:1280px;margin:18px auto 0;padding:0 40px;}
+.rule hr{border:0;border-top:1.5px solid var(--ink);margin:0;}
+
+.grid{max-width:1280px;margin:26px auto 80px;padding:0 40px;
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:22px;}
+.card{background:var(--paper-2);border:1px solid var(--line);position:relative;
+  padding:20px 20px 18px;display:flex;flex-direction:column;gap:14px;}
+.card .num{position:absolute;top:-9px;left:16px;background:var(--flux);color:#fff;
+  font-family:var(--disp);font-weight:900;font-size:12px;letter-spacing:.1em;
+  padding:3px 8px;transform:rotate(-2deg);}
+.row{display:flex;align-items:center;gap:18px;}
+.hero{width:128px;height:128px;flex:none;border:1px solid var(--line);}
+.hero svg{width:100%;height:100%;display:block;}
+.sizes{display:flex;align-items:flex-end;gap:14px;}
+.sizes .s{display:flex;flex-direction:column;align-items:center;gap:6px;}
+.sizes svg{display:block;border:1px solid var(--line);}
+.sizes .cap{font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:var(--ink-3);}
+.s64 svg{width:64px;height:64px;} .s32 svg{width:32px;height:32px;} .s16 svg{width:16px;height:16px;}
+.meta .name{font-weight:900;font-size:19px;letter-spacing:-.02em;}
+.meta .desc{font-family:var(--mono);font-size:12px;color:var(--ink-2);line-height:1.55;margin-top:3px;}
+.tag{font-family:var(--mono);font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--blue);}
+footer{max-width:1280px;margin:0 auto 70px;padding:0 40px;font-family:var(--mono);font-size:12px;color:var(--ink-3);}
+</style>
+</head>
+<body class="grain">
+
+<header>
+  <div class="kicker"><span class="reg">✛</span> Sight Reading · icon system · Signal Tape</div>
+  <h1>Pick a <em>mark.</em></h1>
+  <p class="sub">Ten candidates, all built from the same two-colour discipline —
+  ink&nbsp;+&nbsp;bone canvas, <b>ultramarine = structure/data</b>, <b>flux orange = the
+  live note only</b>. Each is shown at 64 / 32 / 16&nbsp;px so you can judge it as a real
+  app icon &amp; favicon. Tell me the number.</p>
+</header>
+<div class="rule"><hr/></div>
+
+<main class="grid">
+
+  <!-- shared symbol library ------------------------------------------------ -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+
+      <!-- 01 — THE LIVE NOTE (evolves the current favicon) -->
+      <symbol id="ic1" viewBox="0 0 120 120">
+        <rect width="120" height="120" fill="#141210"/>
+        <g stroke="#4A463F" stroke-width="2">
+          <line x1="18" y1="38" x2="102" y2="38"/>
+          <line x1="18" y1="54" x2="102" y2="54"/>
+          <line x1="18" y1="70" x2="102" y2="70"/>
+          <line x1="18" y1="86" x2="102" y2="86"/>
+        </g>
+        <rect x="69" y="32" width="5" height="48" fill="#1D3DF0"/>
+        <g transform="rotate(-22 52 78)"><ellipse cx="52" cy="78" rx="19" ry="13" fill="#FF5B1F"/></g>
+      </symbol>
+
+      <!-- 02 — VU SIGNAL (the signature feedback element) -->
+      <symbol id="ic2" viewBox="0 0 120 120">
+        <rect width="120" height="120" fill="#141210"/>
+        <g>
+          <rect x="16" y="74" width="12" height="22" fill="#1D3DF0"/>
+          <rect x="33" y="62" width="12" height="34" fill="#1D3DF0"/>
+          <rect x="50" y="48" width="12" height="48" fill="#1D3DF0"/>
+          <rect x="67" y="34" width="12" height="62" fill="#1D3DF0"/>
+          <rect x="84" y="22" width="12" height="74" fill="#FF5B1F"/>
+        </g>
+        <rect x="84" y="16" width="12" height="3.5" fill="#FF5B1F"/>
+        <rect x="14" y="98" width="92" height="3" fill="#8A8478"/>
+      </symbol>
+
+      <!-- 03 — SIGNAL TAPE (reel-to-reel; the brand name, literally) -->
+      <symbol id="ic3" viewBox="0 0 120 120">
+        <rect width="120" height="120" fill="#141210"/>
+        <g fill="none" stroke="#ECE7DA" stroke-width="3">
+          <circle cx="40" cy="50" r="17"/>
+          <circle cx="80" cy="50" r="17"/>
+        </g>
+        <circle cx="40" cy="50" r="5" fill="#FF5B1F"/>
+        <circle cx="80" cy="50" r="5" fill="#FF5B1F"/>
+        <path d="M40 67 Q60 86 80 67" fill="none" stroke="#FF5B1F" stroke-width="3.2"/>
+        <rect x="18" y="96" width="84" height="3" fill="#4A463F"/>
+      </symbol>
+
+      <!-- 04 — SIGHT (registration crosshair targeting the note) -->
+      <symbol id="ic4" viewBox="0 0 120 120">
+        <rect width="120" height="120" fill="#ECE7DA"/>
+        <circle cx="60" cy="60" r="33" fill="none" stroke="#1D3DF0" stroke-width="3"/>
+        <g stroke="#1D3DF0" stroke-width="3">
+          <line x1="60" y1="14" x2="60" y2="32"/><line x1="60" y1="88" x2="60" y2="106"/>
+          <line x1="14" y1="60" x2="32" y2="60"/><line x1="88" y1="60" x2="106" y2="60"/>
+        </g>
+        <g transform="rotate(-20 60 60)"><ellipse cx="60" cy="60" rx="14" ry="10" fill="#FF5B1F"/></g>
+      </symbol>
+
+      <!-- 05 — MONOGRAM SR (Archivo black, flux tape) -->
+      <symbol id="ic5" viewBox="0 0 120 120">
+        <rect width="120" height="120" fill="#ECE7DA"/>
+        <rect x="20" y="78" width="80" height="9" fill="#FF5B1F" transform="rotate(-1.5 60 82)"/>
+        <text x="60" y="80" text-anchor="middle" font-family="Archivo, sans-serif"
+          font-weight="900" font-size="74" letter-spacing="-5" fill="#141210">SR</text>
+      </symbol>
+
+      <!-- 06 — FRET GRID (fretboard + the finger you place) -->
+      <symbol id="ic6" viewBox="0 0 120 120">
+        <rect width="120" height="120" fill="#141210"/>
+        <rect x="20" y="20" width="80" height="5" fill="#ECE7DA"/>
+        <g stroke="#1D3DF0" stroke-width="2.4">
+          <line x1="30" y1="25" x2="30" y2="100"/><line x1="50" y1="25" x2="50" y2="100"/>
+          <line x1="70" y1="25" x2="70" y2="100"/><line x1="90" y1="25" x2="90" y2="100"/>
+          <line x1="20" y1="44" x2="100" y2="44"/><line x1="20" y1="64" x2="100" y2="64"/>
+          <line x1="20" y1="84" x2="100" y2="84"/>
+        </g>
+        <circle cx="70" cy="64" r="9" fill="#FF5B1F"/>
+      </symbol>
+
+      <!-- 07 — CROP-MARKED NOTE (the recurring print motif, framed) -->
+      <symbol id="ic7" viewBox="0 0 120 120">
+        <rect width="120" height="120" fill="#ECE7DA"/>
+        <g stroke="#141210" stroke-width="2.6">
+          <path d="M14 28 V14 H28"/><path d="M92 14 H106 V28"/>
+          <path d="M14 92 V106 H28"/><path d="M106 92 V106 H92"/>
+        </g>
+        <rect x="74" y="34" width="4.5" height="44" fill="#141210"/>
+        <g transform="rotate(-22 58 76)"><ellipse cx="58" cy="76" rx="19" ry="13" fill="#FF5B1F"/></g>
+      </symbol>
+
+      <!-- 08 — SOUNDHOLE (rosette + string + live dot) -->
+      <symbol id="ic8" viewBox="0 0 120 120">
+        <rect width="120" height="120" fill="#141210"/>
+        <circle cx="60" cy="60" r="32" fill="none" stroke="#1D3DF0" stroke-width="3" stroke-dasharray="2 6" stroke-linecap="round"/>
+        <circle cx="60" cy="60" r="23" fill="none" stroke="#ECE7DA" stroke-width="2.4"/>
+        <line x1="60" y1="12" x2="60" y2="108" stroke="#FF5B1F" stroke-width="3.2"/>
+        <circle cx="60" cy="60" r="9" fill="#FF5B1F"/>
+      </symbol>
+
+      <!-- 09 — SIGNAL → NOTE (the audio signal resolves into a note) -->
+      <symbol id="ic9" viewBox="0 0 120 120">
+        <rect width="120" height="120" fill="#ECE7DA"/>
+        <line x1="12" y1="62" x2="108" y2="62" stroke="#1D3DF0" stroke-width="2"/>
+        <path d="M12 62 L22 54 L30 62 L42 44 L52 62 L66 30 L76 62"
+          fill="none" stroke="#FF5B1F" stroke-width="4.5" stroke-linejoin="round" stroke-linecap="round"/>
+        <line x1="100" y1="22" x2="100" y2="60" stroke="#141210" stroke-width="4"/>
+        <g transform="rotate(-22 90 60)"><ellipse cx="90" cy="60" rx="13" ry="9.5" fill="#FF5B1F"/></g>
+      </symbol>
+
+      <!-- 10 — BEAMED NOTES (two eighths; the right one is live) -->
+      <symbol id="ic10" viewBox="0 0 120 120">
+        <rect width="120" height="120" fill="#141210"/>
+        <line x1="40" y1="34" x2="88" y2="26" stroke="#1D3DF0" stroke-width="9" stroke-linecap="square"/>
+        <rect x="38" y="32" width="3.6" height="48" fill="#ECE7DA"/>
+        <rect x="86" y="24" width="3.6" height="48" fill="#ECE7DA"/>
+        <g transform="rotate(-20 36 80)"><ellipse cx="36" cy="80" rx="12" ry="8.5" fill="#ECE7DA"/></g>
+        <g transform="rotate(-20 84 72)"><ellipse cx="84" cy="72" rx="12" ry="8.5" fill="#FF5B1F"/></g>
+      </symbol>
+
+    </defs>
+  </svg>
+
+  <!-- cards ----------------------------------------------------------------- -->
+  <section class="card"><span class="num">01</span>
+    <div class="row">
+      <div class="hero"><svg><use href="#ic1"/></svg></div>
+      <div class="sizes">
+        <div class="s s64"><svg><use href="#ic1"/></svg><span class="cap">64</span></div>
+        <div class="s s32"><svg><use href="#ic1"/></svg><span class="cap">32</span></div>
+        <div class="s s16"><svg><use href="#ic1"/></svg><span class="cap">16</span></div>
+      </div>
+    </div>
+    <div class="meta"><div class="tag">staff · evolves current</div>
+      <div class="name">The Live Note</div>
+      <div class="desc">Refines today's favicon: staff, ultramarine stem (structure), flux notehead (the live note). Safest continuity.</div></div>
+  </section>
+
+  <section class="card"><span class="num">02</span>
+    <div class="row">
+      <div class="hero"><svg><use href="#ic2"/></svg></div>
+      <div class="sizes">
+        <div class="s s64"><svg><use href="#ic2"/></svg><span class="cap">64</span></div>
+        <div class="s s32"><svg><use href="#ic2"/></svg><span class="cap">32</span></div>
+        <div class="s s16"><svg><use href="#ic2"/></svg><span class="cap">16</span></div>
+      </div>
+    </div>
+    <div class="meta"><div class="tag">VU · signature element</div>
+      <div class="name">VU Signal</div>
+      <div class="desc">The app's signature feedback meter as the mark — ascending ultramarine bars, one flux peak. Reads as "signal".</div></div>
+  </section>
+
+  <section class="card"><span class="num">03</span>
+    <div class="row">
+      <div class="hero"><svg><use href="#ic3"/></svg></div>
+      <div class="sizes">
+        <div class="s s64"><svg><use href="#ic3"/></svg><span class="cap">64</span></div>
+        <div class="s s32"><svg><use href="#ic3"/></svg><span class="cap">32</span></div>
+        <div class="s s16"><svg><use href="#ic3"/></svg><span class="cap">16</span></div>
+      </div>
+    </div>
+    <div class="meta"><div class="tag">tape · brand name</div>
+      <div class="name">Signal Tape</div>
+      <div class="desc">Reel-to-reel: two reels + flux tape. Literal nod to the brand name. Most conceptual; least "music-app".</div></div>
+  </section>
+
+  <section class="card"><span class="num">04</span>
+    <div class="row">
+      <div class="hero"><svg><use href="#ic4"/></svg></div>
+      <div class="sizes">
+        <div class="s s64"><svg><use href="#ic4"/></svg><span class="cap">64</span></div>
+        <div class="s s32"><svg><use href="#ic4"/></svg><span class="cap">32</span></div>
+        <div class="s s16"><svg><use href="#ic4"/></svg><span class="cap">16</span></div>
+      </div>
+    </div>
+    <div class="meta"><div class="tag">registration ✛ · "sight"</div>
+      <div class="name">Sight</div>
+      <div class="desc">Registration crosshair locking onto a flux notehead — "sight"-reading as aim. Bone tile for contrast in the dock.</div></div>
+  </section>
+
+  <section class="card"><span class="num">05</span>
+    <div class="row">
+      <div class="hero"><svg><use href="#ic5"/></svg></div>
+      <div class="sizes">
+        <div class="s s64"><svg><use href="#ic5"/></svg><span class="cap">64</span></div>
+        <div class="s s32"><svg><use href="#ic5"/></svg><span class="cap">32</span></div>
+        <div class="s s16"><svg><use href="#ic5"/></svg><span class="cap">16</span></div>
+      </div>
+    </div>
+    <div class="meta"><div class="tag">wordmark · Archivo 900</div>
+      <div class="name">Monogram SR</div>
+      <div class="desc">Heavy Archivo "SR" on bone with a flux tape strike. Brand-forward, but two letters get tight at 16&nbsp;px.</div></div>
+  </section>
+
+  <section class="card"><span class="num">06</span>
+    <div class="row">
+      <div class="hero"><svg><use href="#ic6"/></svg></div>
+      <div class="sizes">
+        <div class="s s64"><svg><use href="#ic6"/></svg><span class="cap">64</span></div>
+        <div class="s s32"><svg><use href="#ic6"/></svg><span class="cap">32</span></div>
+        <div class="s s16"><svg><use href="#ic6"/></svg><span class="cap">16</span></div>
+      </div>
+    </div>
+    <div class="meta"><div class="tag">fretboard · guitar</div>
+      <div class="name">Fret Grid</div>
+      <div class="desc">A fretboard fragment (ultramarine grid + bone nut) with the one flux finger-dot you must place. The read→play link.</div></div>
+  </section>
+
+  <section class="card"><span class="num">07</span>
+    <div class="row">
+      <div class="hero"><svg><use href="#ic7"/></svg></div>
+      <div class="sizes">
+        <div class="s s64"><svg><use href="#ic7"/></svg><span class="cap">64</span></div>
+        <div class="s s32"><svg><use href="#ic7"/></svg><span class="cap">32</span></div>
+        <div class="s s16"><svg><use href="#ic7"/></svg><span class="cap">16</span></div>
+      </div>
+    </div>
+    <div class="meta"><div class="tag">crop-marks · editorial</div>
+      <div class="name">Crop-Marked Note</div>
+      <div class="desc">The recurring print motif: a flux notehead "registered" inside ink crop-marks on bone. Quietest, most editorial.</div></div>
+  </section>
+
+  <section class="card"><span class="num">08</span>
+    <div class="row">
+      <div class="hero"><svg><use href="#ic8"/></svg></div>
+      <div class="sizes">
+        <div class="s s64"><svg><use href="#ic8"/></svg><span class="cap">64</span></div>
+        <div class="s s32"><svg><use href="#ic8"/></svg><span class="cap">32</span></div>
+        <div class="s s16"><svg><use href="#ic8"/></svg><span class="cap">16</span></div>
+      </div>
+    </div>
+    <div class="meta"><div class="tag">soundhole · halftone</div>
+      <div class="name">Soundhole</div>
+      <div class="desc">A halftone-dotted rosette + a single flux string and live dot. Guitar-forward with riso texture baked in.</div></div>
+  </section>
+
+  <section class="card"><span class="num">09</span>
+    <div class="row">
+      <div class="hero"><svg><use href="#ic9"/></svg></div>
+      <div class="sizes">
+        <div class="s s64"><svg><use href="#ic9"/></svg><span class="cap">64</span></div>
+        <div class="s s32"><svg><use href="#ic9"/></svg><span class="cap">32</span></div>
+        <div class="s s16"><svg><use href="#ic9"/></svg><span class="cap">16</span></div>
+      </div>
+    </div>
+    <div class="meta"><div class="tag">waveform · concept</div>
+      <div class="name">Signal → Note</div>
+      <div class="desc">A flux input waveform resolving into a notehead on the ultramarine baseline — pitch detection, as a picture.</div></div>
+  </section>
+
+  <section class="card"><span class="num">10</span>
+    <div class="row">
+      <div class="hero"><svg><use href="#ic10"/></svg></div>
+      <div class="sizes">
+        <div class="s s64"><svg><use href="#ic10"/></svg><span class="cap">64</span></div>
+        <div class="s s32"><svg><use href="#ic10"/></svg><span class="cap">32</span></div>
+        <div class="s s16"><svg><use href="#ic10"/></svg><span class="cap">16</span></div>
+      </div>
+    </div>
+    <div class="meta"><div class="tag">beamed eighths · classic</div>
+      <div class="name">Beamed Notes</div>
+      <div class="desc">Two beamed eighth-notes, the right one live in flux. The most instantly-"music" of the set; bold and geometric.</div></div>
+  </section>
+
+</main>
+
+<footer>SIGHT READING · 10 candidates · bone #ECE7DA · ink #141210 · ultramarine #1D3DF0 · flux #FF5B1F — say a number and I'll produce the full icon set (.icns / .ico / PNG) + favicon.</footer>
+
+</body>
+</html>
