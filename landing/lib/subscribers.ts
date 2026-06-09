@@ -141,8 +141,8 @@ export async function recordSubscriber(
 // the style above — no SDK dependency):
 //
 //   1. sendLeadNotification → tells the operator a new lead came in.
-//   2. sendDownloadEmail    → gives the visitor the download link (makes the
-//      "Check your inbox" UI copy true).
+//   2. sendDownloadEmail    → welcomes the visitor and hands over the download
+//      link (makes the "Check your inbox" UI copy true).
 //
 // Both require RESEND_API_KEY + RESEND_FROM. Like recordSubscriber, they never
 // throw to the caller — failures are logged and reported as { sent: false } so
@@ -163,6 +163,7 @@ async function sendEmail(opts: {
   to: string;
   subject: string;
   html: string;
+  text?: string;
   replyTo?: string;
 }): Promise<{ sent: boolean }> {
   const apiKey = process.env.RESEND_API_KEY;
@@ -186,6 +187,7 @@ async function sendEmail(opts: {
         to: [opts.to],
         subject: opts.subject,
         html: opts.html,
+        ...(opts.text ? { text: opts.text } : {}),
         ...(opts.replyTo ? { reply_to: opts.replyTo } : {}),
       }),
     });
@@ -202,33 +204,103 @@ async function sendEmail(opts: {
   }
 }
 
-/** Email the visitor their demo download link (Signal Tape styling). */
+/**
+ * Build the visitor's welcome + download email (Signal Tape styling).
+ *
+ * Pure: returns { subject, html, text } so the body can be previewed and tested
+ * without sending. `sendDownloadEmail` wraps this with `sendEmail`.
+ */
+export function buildDownloadEmail(downloadUrl: string): {
+  subject: string;
+  html: string;
+  text: string;
+} {
+  const url = escapeHtml(downloadUrl);
+  // HTML uses entities (not raw multibyte chars) so the email renders correctly
+  // regardless of the client's charset handling; the plaintext part stays ASCII.
+  const preheader =
+    "Your Sight Reading demo is ready &mdash; download and start a drill in under a minute.";
+
+  // One numbered row of the "Getting started" list. A table keeps the number
+  // and copy aligned across the email clients that ignore list styling.
+  const step = (n: number, body: string) => `
+        <tr>
+          <td valign="top" style="padding:0 12px 10px 0;color:#1D3DF0;font-weight:700;font-size:14px;line-height:1.5">${n}</td>
+          <td valign="top" style="padding:0 0 10px;font-size:14px;line-height:1.5;color:#4A463F">${body}</td>
+        </tr>`;
+
+  const html = `
+  <div style="font-family:-apple-system,system-ui,Segoe UI,sans-serif;background:#ECE7DA;padding:32px 16px;color:#141210">
+    <div style="display:none;max-height:0;overflow:hidden;opacity:0;color:#ECE7DA;font-size:1px;line-height:1px">${preheader}</div>
+    <div style="max-width:480px;margin:0 auto;background:#F3EFE4;border:1px solid #CFC8B6;border-radius:4px;padding:32px">
+      <p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#8A8478">Sight Reading</p>
+      <h1 style="margin:0 0 16px;font-size:22px;line-height:1.25">You're in &mdash; here's your demo</h1>
+      <p style="margin:0 0 24px;font-size:15px;line-height:1.5;color:#4A463F">
+        Thanks for signing up. Sight Reading turns notes on the staff into instant
+        recognition on the fretboard &mdash; read the note, play it, build speed. Grab the
+        build below and you can start a drill in under a minute.
+      </p>
+      <p style="margin:0 0 12px">
+        <a href="${url}" style="display:inline-block;background:#1D3DF0;color:#fff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 22px;border-radius:4px">Download the demo &darr;</a>
+      </p>
+      <p style="margin:0 0 28px;font-size:13px;line-height:1.5;color:#8A8478">
+        macOS &amp; Windows &middot; ~5&nbsp;MB &middot; or open it in your browser:
+        <a href="${url}" style="color:#142BB0">${url}</a>
+      </p>
+      <div style="border-top:1px solid #CFC8B6;margin:0 0 20px"></div>
+      <p style="margin:0 0 12px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#8A8478">Getting started</p>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 0 24px">
+        ${step(1, "Install and open it.")}
+        ${step(2, "Pick a string set and position, then press start.")}
+        ${step(3, "Read the note, play it on the fretboard, and keep the streak going.")}
+      </table>
+      <p style="margin:0;font-size:15px;line-height:1.5;color:#4A463F">
+        I build this solo and read every reply &mdash; tell me what's working and what isn't.<br />
+        <strong>&mdash; Julien</strong>
+      </p>
+    </div>
+    <p style="max-width:480px;margin:16px auto 0;font-size:12px;line-height:1.5;color:#8A8478;text-align:center">
+      You're getting this because you requested the Sight Reading demo.
+    </p>
+  </div>`;
+
+  const text = [
+    "SIGHT READING",
+    "",
+    "You're in - here's your demo.",
+    "",
+    "Thanks for signing up. Sight Reading turns notes on the staff into instant",
+    "recognition on the fretboard - read the note, play it, build speed. Grab the",
+    "build below and you can start a drill in under a minute.",
+    "",
+    "Download the demo (macOS & Windows, ~5 MB):",
+    downloadUrl,
+    "",
+    "Getting started:",
+    "  1. Install and open it.",
+    "  2. Pick a string set and position, then press start.",
+    "  3. Read the note, play it on the fretboard, and keep the streak going.",
+    "",
+    "I build this solo and read every reply - tell me what's working and what isn't.",
+    "- Julien",
+    "",
+    "You're getting this because you requested the Sight Reading demo.",
+  ].join("\n");
+
+  return {
+    subject: "Welcome to Sight Reading — your demo download",
+    html,
+    text,
+  };
+}
+
+/** Email the visitor their welcome + demo download (Signal Tape styling). */
 export async function sendDownloadEmail(
   userEmail: string,
   downloadUrl: string,
 ): Promise<{ sent: boolean }> {
-  const url = escapeHtml(downloadUrl);
-  const html = `
-  <div style="font-family:-apple-system,system-ui,Segoe UI,sans-serif;background:#ECE7DA;padding:32px 16px;color:#141210">
-    <div style="max-width:480px;margin:0 auto;background:#F3EFE4;border:1px solid #CFC8B6;border-radius:4px;padding:32px">
-      <p style="margin:0 0 4px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:#8A8478">Sight Reading</p>
-      <h1 style="margin:0 0 16px;font-size:22px;line-height:1.25">Here's your demo download</h1>
-      <p style="margin:0 0 24px;font-size:15px;line-height:1.5;color:#4A463F">
-        Thanks for trying the prototype. Grab the build below — it runs on macOS and Windows (~5&nbsp;MB).
-      </p>
-      <p style="margin:0 0 24px">
-        <a href="${url}" style="display:inline-block;background:#1D3DF0;color:#fff;text-decoration:none;font-weight:600;font-size:15px;padding:12px 22px;border-radius:4px">Download the demo ↓</a>
-      </p>
-      <p style="margin:0;font-size:13px;line-height:1.5;color:#8A8478">
-        Or open it in your browser: <a href="${url}" style="color:#142BB0">${url}</a>
-      </p>
-    </div>
-  </div>`;
-  return sendEmail({
-    to: userEmail,
-    subject: "Your Sight Reading demo download",
-    html,
-  });
+  const { subject, html, text } = buildDownloadEmail(downloadUrl);
+  return sendEmail({ to: userEmail, subject, html, text });
 }
 
 /**
