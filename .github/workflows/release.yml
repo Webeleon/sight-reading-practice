@@ -12,6 +12,11 @@ on:
 permissions:
   contents: write # the release job creates/updates the GitHub Release
 
+# Run the JS-based actions (checkout, setup-node, artifact, gh-release) on Node 24
+# instead of the deprecated Node 20 runtime. GitHub forces this from 2026-06-16.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   # Gate the release on the existing test suite (unit + property + typecheck + purity).
   test:
