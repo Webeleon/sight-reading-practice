@@ -47,12 +47,16 @@ export async function POST(request: Request) {
 
   try {
     const normalisedSource = typeof source === "string" ? source : undefined;
-    await recordSubscriber({ email, source: normalisedSource });
-    // Fire both emails; neither throws, and a failure must not break the
-    // response — the user still gets their download link below.
+    // The visitor's download email is the priority: send it first and on its
+    // own so it always claims the first Resend rate-limit slot. If anything has
+    // to be dropped or delayed under load, it won't be this one.
+    await sendDownloadEmail(email, downloadUrl);
+    // Operator-facing work (audience capture + lead notification) follows. These
+    // tolerate a retry/backoff on 429 (see resendFetch) and never throw, so a
+    // failure here doesn't break the response — the user still gets their link.
     await Promise.allSettled([
+      recordSubscriber({ email, source: normalisedSource }),
       sendLeadNotification({ email, source: normalisedSource, downloadUrl }),
-      sendDownloadEmail(email, downloadUrl),
     ]);
   } catch (err) {
     // recordSubscriber/sends are defensive, but never let an unexpected throw

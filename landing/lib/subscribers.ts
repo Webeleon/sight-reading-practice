@@ -47,6 +47,33 @@ export type SubscriberInput = {
   source?: string;
 };
 
+/**
+ * POST to the Resend API, retrying on 429 (rate limit). Resend's default limit
+ * is ~2 requests/second, and each signup makes several Resend calls (audience
+ * capture + two emails), so a burst can trip the limit. On a 429 we wait for the
+ * window to reset — honouring Resend's rate-limit headers — and retry a few
+ * times, capping the wait so we stay well under the function timeout.
+ */
+async function resendFetch(
+  url: string,
+  init: RequestInit,
+  attempts = 3,
+): Promise<Response> {
+  for (let attempt = 0; ; attempt++) {
+    const res = await fetch(url, init);
+    if (res.status !== 429 || attempt >= attempts - 1) return res;
+
+    const resetSeconds = Number(
+      res.headers.get("retry-after") ?? res.headers.get("ratelimit-reset"),
+    );
+    const waitMs =
+      Number.isFinite(resetSeconds) && resetSeconds > 0
+        ? Math.min(resetSeconds * 1000, 1500)
+        : 500 * (attempt + 1);
+    await new Promise((resolve) => setTimeout(resolve, waitMs));
+  }
+}
+
 export async function recordSubscriber(
   input: SubscriberInput,
 ): Promise<RecordResult> {
@@ -81,7 +108,7 @@ export async function recordSubscriber(
   // 2) Resend audience -------------------------------------------------------
   if (process.env.RESEND_API_KEY && process.env.RESEND_AUDIENCE_ID) {
     try {
-      const res = await fetch(
+      const res = await resendFetch(
         `https://api.resend.com/audiences/${process.env.RESEND_AUDIENCE_ID}/contacts`,
         {
           method: "POST",
@@ -176,7 +203,7 @@ async function sendEmail(opts: {
   }
 
   try {
-    const res = await fetch(RESEND_ENDPOINT, {
+    const res = await resendFetch(RESEND_ENDPOINT, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${apiKey}`,
