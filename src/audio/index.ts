@@ -99,3 +99,6 @@ export {
   DEFAULT_DETECTOR_KIND,
   INPUT_LEVEL_SMOOTHING,
 } from './audioGraph.js';
+
+// --- standalone live input-level monitor (Web Audio; mic-check needle) ---
+export { InputLevelMonitor, MONITOR_FFT_SIZE } from './inputMonitor.js';

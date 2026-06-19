@@ -18,6 +18,7 @@ import {
   type AudioInputDevice,
 } from '../../audio/index.js';
 import { getAppConfig, setAppConfig } from '../appConfig.js';
+import { micMeterBars } from './micMeter.js';
 
 export interface DevicePickerProps {
   /** Current selected deviceId (controlled by App), or undefined for default. */
@@ -25,6 +26,9 @@ export interface DevicePickerProps {
   disabled: boolean;
   /** Called when the user picks a device (App persists + uses it). */
   onChange: (deviceId: string | undefined) => void;
+  /** Live input level (0..~1) driving the mic-check needle. Owned by the parent
+   *  (via useLiveInputLevel) so one mic tap feeds both this and the console VU. */
+  level: number;
 }
 
 // ---- Signal Tape "MIC CHECK" inline-style fragments (design .onb .mic) ---------
@@ -89,10 +93,26 @@ const micCapStyle: React.CSSProperties = {
   color: '#b6b1a5',
 };
 
+// The live "needle": a row of bars that jump with input level (design .mic .bars).
+const micBarsStyle: React.CSSProperties = {
+  display: 'flex',
+  gap: 3,
+  alignItems: 'flex-end',
+  height: 52,
+  borderBottom: '1.5px solid #6a655c',
+};
+
+const micBarBaseStyle: React.CSSProperties = {
+  flex: 1,
+  borderRadius: '2px 2px 0 0',
+  transition: 'height 80ms linear',
+};
+
 export function DevicePicker({
   deviceId,
   disabled,
   onChange,
+  level,
 }: DevicePickerProps): React.JSX.Element {
   const [devices, setDevices] = useState<AudioInputDevice[]>([]);
   const [permission, setPermission] = useState<'unknown' | 'granted' | 'denied'>(
@@ -192,6 +212,19 @@ export function DevicePicker({
         >
           Rescan
         </button>
+      </div>
+
+      <div className="mic-bars" aria-hidden="true" style={micBarsStyle}>
+        {micMeterBars(level).map((bar, i) => (
+          <span
+            key={i}
+            style={{
+              ...micBarBaseStyle,
+              height: `${bar.height}%`,
+              background: bar.hot ? 'var(--flux)' : 'var(--blue)',
+            }}
+          />
+        ))}
       </div>
 
       {permission === 'denied' ? (
