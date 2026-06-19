@@ -13,10 +13,15 @@
       already permitted by default-src 'self' — no connect-src/CDN loosening needed.
       Acceptable for this throwaway prototype; pitchy needs none of this and stays the
       default. See LEARNINGS.md "CREPE: detector selection + Electron loading (CSP)".
+
+      media-src adds blob: so the detection-review can play back the recorded take:
+      it plays via <audio src={URL.createObjectURL(blob)}> (a blob: URL), which
+      media-src would otherwise inherit from default-src 'self' and refuse to load
+      — leaving the recording silently unavailable.
     -->
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self';"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; media-src 'self' blob:; font-src 'self';"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Sight Reading</title>
