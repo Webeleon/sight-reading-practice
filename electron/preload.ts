@@ -10,7 +10,7 @@
 // is an obvious place to add IPC channels (db writes, device config) in later milestones.
 // Nothing dangerous (no ipcRenderer passthrough, no require, no fs) is exposed.
 
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 
 /** The small persisted renderer config (mirrors AppConfig in main.ts). */
 export interface AppConfig {
@@ -22,6 +22,14 @@ export interface AppConfig {
   detector?: 'pitchy' | 'crepe';
   /** Whether the first-run onboarding/setup screen has been completed. */
   onboardingComplete?: boolean;
+  /** Last-used practice config (key/position/bars/tempo), persisted so the app
+   *  reopens on the settings last practiced with. */
+  tempo?: number;
+  keyIndex?: number;
+  positionIndex?: number;
+  barCount?: number;
+  /** Whether the in-app dev-tools drawer is shown in the practice view. */
+  devDrawerVisible?: boolean;
 }
 
 /** Filter bag passed to the stats queries; mirrors AccuracyFilter/HeatmapFilter
@@ -94,6 +102,22 @@ const api = {
     /** Merge a patch into the config, persist it, return the merged result. */
     set: (patch: AppConfig): Promise<AppConfig> =>
       ipcRenderer.invoke('config:set', patch),
+  },
+  /**
+   * Chromium DevTools (inspector) control for the Settings "Developer" section.
+   * The renderer cannot open its own inspector under contextIsolation, so it asks
+   * the main process. `onChange` pushes the live open/closed state (e.g. when the
+   * user closes the inspector via its own UI) so the Settings toggle stays honest.
+   */
+  devtools: {
+    toggle: (): Promise<{ open: boolean }> =>
+      ipcRenderer.invoke('devtools:toggle'),
+    isOpen: (): Promise<boolean> => ipcRenderer.invoke('devtools:isOpen'),
+    onChange: (cb: (open: boolean) => void): (() => void) => {
+      const listener = (_e: IpcRendererEvent, open: boolean): void => cb(open);
+      ipcRenderer.on('devtools:changed', listener);
+      return () => ipcRenderer.removeListener('devtools:changed', listener);
+    },
   },
   /**
    * Read-only stats queries (Milestone 5 views). The renderer NEVER touches the

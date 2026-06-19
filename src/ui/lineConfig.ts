@@ -48,6 +48,41 @@ export const DEFAULT_UI_CONFIG: UiConfig = {
   tempo: 120,
 };
 
+/** Rebuild a UiConfig from the persisted (possibly partial or stale) config,
+ *  falling back to DEFAULT_UI_CONFIG for any missing or out-of-range field. This
+ *  is how the practice config "remembers" its last-used values across launches:
+ *  the App seeds uiConfig from this on mount. Indices are clamped to the current
+ *  KEY_CHOICES / POSITION_CHOICES length, and tempo/bars to the stepper bounds, so
+ *  a config written by an older/newer build never selects a missing option. */
+export function hydrateUiConfig(saved: {
+  tempo?: number;
+  keyIndex?: number;
+  positionIndex?: number;
+  barCount?: number;
+}): UiConfig {
+  const idx = (v: number | undefined, len: number, fallback: number): number =>
+    typeof v === 'number' && Number.isInteger(v) && v >= 0 && v < len ? v : fallback;
+  const num = (
+    v: number | undefined,
+    lo: number,
+    hi: number,
+    fallback: number,
+  ): number =>
+    typeof v === 'number' && Number.isFinite(v)
+      ? Math.round(Math.min(hi, Math.max(lo, v)))
+      : fallback;
+  return {
+    keyIndex: idx(saved.keyIndex, KEY_CHOICES.length, DEFAULT_UI_CONFIG.keyIndex),
+    positionIndex: idx(
+      saved.positionIndex,
+      POSITION_CHOICES.length,
+      DEFAULT_UI_CONFIG.positionIndex,
+    ),
+    barCount: num(saved.barCount, 2, 16, DEFAULT_UI_CONFIG.barCount),
+    tempo: num(saved.tempo, 30, 300, DEFAULT_UI_CONFIG.tempo),
+  };
+}
+
 /** Turn the UI config into a generator LineConfig. */
 export function toLineConfig(ui: UiConfig): LineConfig {
   const key = KEY_CHOICES[ui.keyIndex]?.key ?? KEY_CHOICES[0]!.key;
