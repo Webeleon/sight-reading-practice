@@ -29,8 +29,10 @@ import type { Line } from '../domain/index.js';
 import { OsmdView, type CursorHandle } from './components/OsmdView.js';
 import { ConfigPanel } from './components/ConfigPanel.js';
 import { DevicePicker } from './components/DevicePicker.js';
+import { micMeterBars } from './components/micMeter.js';
 import { HeadphoneTip } from './components/HeadphoneTip.js';
 import { OnboardingView } from './components/OnboardingView.js';
+import { useLiveInputLevel } from './useLiveInputLevel.js';
 import { ResultsScreen } from './components/ResultsScreen.js';
 import {
   useSightReading,
@@ -380,15 +382,18 @@ export function App(): React.JSX.Element {
   // Status-bar phase token + live flag.
   const isLive = phase === 'playing';
   const detectorLabel = (activeDetector ?? detectorKind).toUpperCase();
-  // VU meter: drive from the hook's smoothed inputLevel when a live take is
-  // running; otherwise let the CSS keyframe animation idle the bars.
-  const vuLive = isRunning && inputLevel > 0;
+  // Always-on input level for the VU/needle: a standalone mic monitor runs whenever
+  // we're in practice and NOT mid-take, so you can play and watch the meter any time
+  // (the original bug: it only moved during a take). During a take the monitor hands
+  // the device to the detector graph and we show that graph's smoothed inputLevel.
+  const liveLevel = useLiveInputLevel(inputDeviceId, onboarded === true && !isRunning);
+  const displayLevel = isRunning ? inputLevel : liveLevel;
 
-  // Twelve VU bars. When live, each bar's height tracks inputLevel with a fixed
-  // per-bar profile (so the meter "shapes" rather than moving in lock-step); the
-  // hottest bar tips into flux. When idle, no inline height -> the CSS animation
-  // (styles from the design VU) drives them.
-  const VU_PROFILE = [0.42, 0.62, 0.5, 0.78, 0.66, 0.9, 1, 0.82, 0.7, 0.56, 0.46, 0.36];
+  // VU meter: "driven" (real heights) whenever there's input above the noise floor —
+  // live monitor when idle, take level while running. Below that, the CSS keyframe
+  // animation idles the bars. Heights/hot come from the shared micMeterBars mapping
+  // so the console VU and the mic-check needle read identically.
+  const vuLive = displayLevel > 0.012;
 
   // Practice body kept as an element value (not a nested component) so toggling
   // the view does not remount the read-along hooks/refs.
@@ -488,21 +493,15 @@ export function App(): React.JSX.Element {
               <span className="peak">{vuLive ? 'LIVE' : 'IDLE'}</span>
             </div>
             <div className={'bars' + (vuLive ? ' is-driven' : '')}>
-              {VU_PROFILE.map((p, i) => {
-                // Live: scale this bar by inputLevel × its profile weight; the
-                // loudest profile bar tips into flux above a threshold.
-                const h = vuLive
-                  ? Math.max(8, Math.min(100, inputLevel * 100 * p * 1.6))
-                  : undefined;
-                const hot = vuLive && p >= 0.95 && inputLevel * p > 0.45;
-                return (
-                  <span
-                    key={i}
-                    className={'bar' + (hot ? ' is-hot' : '')}
-                    style={h !== undefined ? { height: `${h}%` } : undefined}
-                  />
-                );
-              })}
+              {micMeterBars(displayLevel).map((bar, i) => (
+                // Live: real per-bar heights from the shared mapping; the loudest
+                // bars tip into flux. Idle: no inline height -> CSS idle animation.
+                <span
+                  key={i}
+                  className={'bar' + (vuLive && bar.hot ? ' is-hot' : '')}
+                  style={vuLive ? { height: `${bar.height}%` } : undefined}
+                />
+              ))}
             </div>
           </div>
           <div className="score">
@@ -637,6 +636,7 @@ export function App(): React.JSX.Element {
               deviceId={inputDeviceId}
               disabled={isRunning}
               onChange={setInputDeviceId}
+              level={liveLevel}
             />
           </div>
         )}

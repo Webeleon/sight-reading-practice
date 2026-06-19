@@ -19,6 +19,7 @@ import {
   type UiConfig,
 } from '../lineConfig.js';
 import { DevicePicker } from './DevicePicker.js';
+import { useLiveInputLevel } from '../useLiveInputLevel.js';
 
 export interface OnboardingViewProps {
   config: UiConfig;
@@ -45,6 +46,10 @@ export function OnboardingView({
   onDeviceChange,
   onStart,
 }: OnboardingViewProps): React.JSX.Element {
+  // The mic check is live the whole time onboarding is on screen — play and watch
+  // the needle before your first line. No take is running here, so it always owns
+  // the input.
+  const level = useLiveInputLevel(inputDeviceId, true);
   return (
     <div className="onboarding">
       <div className="onb">
@@ -78,6 +83,7 @@ export function OnboardingView({
               deviceId={inputDeviceId}
               disabled={false}
               onChange={onDeviceChange}
+              level={level}
             />
           </div>
         </div>
