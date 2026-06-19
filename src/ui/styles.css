@@ -679,7 +679,11 @@ body::after {
   border: 1.5px solid var(--ink);
   border-radius: var(--r);
   padding: 18px 18px 12px;
-  overflow-x: auto;
+  /* overflow stays VISIBLE so the "★ TAKE" tape can poke above the top border
+     (top: -11px). The horizontal scroll for wide notation lives on .osmd-wrap
+     instead — setting overflow-x:auto here would force overflow-y to auto too
+     (CSS spec) and clip the tape. */
+  overflow: visible;
 }
 
 /* "take" tab tape on the sheet, echoing the design .sheet .tape */
@@ -702,6 +706,9 @@ body::after {
 
 .osmd-wrap {
   position: relative;
+  /* Wide notation scrolls here (moved off .staff-area) so the sheet frame + the
+     "★ TAKE" tape stay put while the engraving scrolls within. */
+  overflow-x: auto;
 }
 
 .osmd-container {

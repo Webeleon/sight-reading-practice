@@ -17,6 +17,17 @@ export interface AppConfig {
    *  pressed "Start practicing" or skipped). When unset/false the app opens on
    *  the onboarding hero instead of mounting straight into practice. */
   onboardingComplete?: boolean;
+  /** Last-used practice config (key/position/bars/tempo) — persisted so the app
+   *  reopens on the settings you last practiced with (edited from either the
+   *  practice ConfigPanel or the Settings tab). Each is optional; missing fields
+   *  fall back to DEFAULT_UI_CONFIG via hydrateUiConfig. */
+  tempo?: number;
+  keyIndex?: number;
+  positionIndex?: number;
+  barCount?: number;
+  /** Whether the in-app dev-tools drawer is shown/expanded in the practice view
+   *  (toggled by the Settings switch and the in-practice caret; persisted). */
+  devDrawerVisible?: boolean;
 }
 
 interface ConfigBridge {
@@ -78,12 +89,25 @@ interface PresetsBridge {
   remove: (id: string) => Promise<{ deleted: boolean }>;
 }
 
+/** Chromium DevTools (inspector) control — main-process only, so this member is
+ *  absent outside Electron (the Settings toggle degrades to "Electron only"). */
+interface DevtoolsBridge {
+  /** Open the inspector if closed (else close it); resolves to the new state. */
+  toggle: () => Promise<{ open: boolean }>;
+  /** Whether the inspector is currently open (to seed the toggle on mount). */
+  isOpen: () => Promise<boolean>;
+  /** Subscribe to open/closed changes (e.g. closed via the inspector's own UI);
+   *  returns an unsubscribe function. */
+  onChange: (cb: (open: boolean) => void) => () => void;
+}
+
 interface SightReadingBridge {
   isElectron: boolean;
   versions: { electron: string; chrome: string; node: string };
   config?: ConfigBridge;
   session?: SessionBridge;
   presets?: PresetsBridge;
+  devtools?: DevtoolsBridge;
 }
 
 declare global {

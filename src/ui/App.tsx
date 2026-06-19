@@ -49,12 +49,14 @@ import { getAppConfig, setAppConfig } from './appConfig.js';
 import {
   DEFAULT_UI_CONFIG,
   generateFreshLine,
+  hydrateUiConfig,
   toLineConfig,
   KEY_CHOICES,
   POSITION_CHOICES,
   type UiConfig,
 } from './lineConfig.js';
 import { StatsView } from './views/StatsView.js';
+import { SettingsView } from './views/SettingsView.js';
 import {
   startSession,
   endSession,
@@ -69,8 +71,8 @@ import {
 const COUNT_IN_BARS = 1;
 const RETRY_SLOWER_FACTOR = 0.7; // retry_slower tempo = 70% of configured tempo
 
-/** Which top-level screen is showing (brief M5: switch practice <-> stats). */
-type AppView = 'practice' | 'stats';
+/** Which top-level screen is showing (practice <-> stats <-> settings). */
+type AppView = 'practice' | 'stats' | 'settings';
 
 /** Short, uppercase attempt-type label for the topbar / status chips. */
 function attemptLabel(type: AttemptType): string {
@@ -106,9 +108,16 @@ export function App(): React.JSX.Element {
   // "Hear line": optionally play a soft tone per note alongside the clicks (ON by
   // default — the human asked to hear the line while reading).
   const [melody, setMelody] = useState(true);
-  // Dev tools drawer (synthetic-take harness + detector picker live here, kept
-  // reachable but visually de-emphasised + collapsed by default).
-  const [devToolsOpen, setDevToolsOpen] = useState(false);
+  // Dev tools drawer (synthetic-take harness + detector picker live here).
+  // `devDrawerVisible` (persisted, set only from Settings) governs whether the
+  // drawer appears in practice AT ALL; `devDrawerExpanded` is a local in-practice
+  // collapse of the body (not persisted) so the caret doesn't fight the switch.
+  const [devDrawerVisible, setDevDrawerVisible] = useState(false);
+  const [devDrawerExpanded, setDevDrawerExpanded] = useState(true);
+  // Headphone tip visibility — controlled here (hydrated from the persisted
+  // headphoneTipDismissed flag) so the Settings "re-show" reset can bring it back
+  // immediately, not only on the next launch.
+  const [showHeadphoneTip, setShowHeadphoneTip] = useState(false);
 
   const cursorHandleRef = useRef<CursorHandle | null>(null);
   const [cursorReady, setCursorReady] = useState(false);
@@ -155,31 +164,30 @@ export function App(): React.JSX.Element {
     melody,
   });
 
-  // Generate the first line on mount.
-  useEffect(() => {
-    setLine(generateFreshLine(DEFAULT_UI_CONFIG));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Restore the persisted detector choice on mount (Electron IPC, else
-  // localStorage). Defaults to pitchy if unset / persistence off.
+  // Hydrate persisted state on mount in a single config read (Electron IPC, else
+  // localStorage). Seeds the "remember last-used" practice config, the detector
+  // choice, the dev-drawer visibility, the headphone-tip flag, and the onboarding
+  // gate — then generates the first line FROM the hydrated config so the remembered
+  // settings take effect immediately (defaults are merged in by hydrateUiConfig).
   useEffect(() => {
     void getAppConfig().then((cfg) => {
+      const hydrated = hydrateUiConfig(cfg);
+      setUiConfig(hydrated);
+      setLine(generateFreshLine(hydrated));
       if (cfg.detector === 'crepe' || cfg.detector === 'pitchy') {
         setDetectorKind(cfg.detector);
-        console.log(`[UI] restored detector choice: ${cfg.detector}`);
       }
-    });
-  }, []);
-
-  // Resolve the first-run onboarding gate on mount: if the user has already
-  // completed setup we go straight to practice; otherwise we open on the design
-  // screen-01 hero. Defaults to "show onboarding" when the flag is unset.
-  useEffect(() => {
-    void getAppConfig().then((cfg) => {
+      setDevDrawerVisible(cfg.devDrawerVisible === true);
+      setShowHeadphoneTip(cfg.headphoneTipDismissed !== true);
       setOnboarded(cfg.onboardingComplete === true);
-      console.log(`[UI] onboarding complete=${cfg.onboardingComplete === true}`);
+      console.log(
+        `[UI] hydrated config: key=${hydrated.keyIndex} pos=${hydrated.positionIndex} ` +
+          `bars=${hydrated.barCount} tempo=${hydrated.tempo} ` +
+          `detector=${cfg.detector ?? 'default'} ` +
+          `onboarded=${cfg.onboardingComplete === true}`,
+      );
     });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Finish onboarding: persist the flag, regenerate the first line from the just-
@@ -199,18 +207,56 @@ export function App(): React.JSX.Element {
     void setAppConfig({ detector: kind });
   }, []);
 
+  // Write-through practice-config change: update state AND persist the last-used
+  // key/position/bars/tempo. Shared by the practice ConfigPanel, onboarding, and
+  // the Settings tab so all three edit one remembered config.
+  const handleConfigChange = useCallback((next: UiConfig): void => {
+    setUiConfig(next);
+    void setAppConfig({
+      tempo: next.tempo,
+      keyIndex: next.keyIndex,
+      positionIndex: next.positionIndex,
+      barCount: next.barCount,
+    });
+  }, []);
+
+  // Show/hide + persist the in-app dev drawer (Settings switch + in-practice caret).
+  const handleDevDrawerToggle = useCallback((next: boolean): void => {
+    setDevDrawerVisible(next);
+    void setAppConfig({ devDrawerVisible: next });
+  }, []);
+
+  // Headphone tip: dismiss (persist dismissed) / re-show from Settings (persist
+  // not-dismissed so it reappears immediately within the session).
+  const handleDismissHeadphoneTip = useCallback((): void => {
+    setShowHeadphoneTip(false);
+    void setAppConfig({ headphoneTipDismissed: true });
+    console.log('[UI] headphone tip dismissed (persisted)');
+  }, []);
+
+  const handleResetHeadphoneTip = useCallback((): void => {
+    setShowHeadphoneTip(true);
+    void setAppConfig({ headphoneTipDismissed: false });
+    console.log('[UI] headphone tip re-shown from settings (persisted)');
+  }, []);
+
   // Begin a session on mount; end it on unmount (the main process ALSO ends any
   // still-open session on before-quit, covering a hard Cmd+Q). The configSnapshot
   // is the generator LineConfig the session started with.
   useEffect(() => {
     const id = newId();
     sessionIdRef.current = id;
-    void startSession(id, toLineConfig(DEFAULT_UI_CONFIG)).then((ack) => {
-      console.log(
-        `[UI] session ${id} started (persisted=${ack.persisted}` +
-          `${ack.persisted ? '' : ' — persistence disabled'})`,
-      );
-    });
+    // Snapshot the session's starting config from the persisted (last-used) config
+    // so the stored snapshot reflects what the user actually opens on, not the
+    // hardcoded defaults. Reads the same tiny config the hydration effect does.
+    void getAppConfig()
+      .then((cfg) => startSession(id, toLineConfig(hydrateUiConfig(cfg))))
+      .then((ack) => {
+        console.log(
+          `[UI] session ${id} started (persisted=${ack.persisted}` +
+            `${ack.persisted ? '' : ' — persistence disabled'})`,
+        );
+      });
     // Best-effort end on window close (renderer-driven; main has a backstop).
     const onBeforeUnload = (): void => {
       if (sessionIdRef.current) void endSession(sessionIdRef.current);
@@ -386,7 +432,12 @@ export function App(): React.JSX.Element {
   // we're in practice and NOT mid-take, so you can play and watch the meter any time
   // (the original bug: it only moved during a take). During a take the monitor hands
   // the device to the detector graph and we show that graph's smoothed inputLevel.
-  const liveLevel = useLiveInputLevel(inputDeviceId, onboarded === true && !isRunning);
+  // Gated on view === 'practice' too, so the practice monitor and the Settings-tab
+  // monitor never tap the same input device at once.
+  const liveLevel = useLiveInputLevel(
+    inputDeviceId,
+    onboarded === true && !isRunning && view === 'practice',
+  );
   const displayLevel = isRunning ? inputLevel : liveLevel;
 
   // VU meter: "driven" (real heights) whenever there's input above the noise floor —
@@ -399,7 +450,7 @@ export function App(): React.JSX.Element {
   // the view does not remount the read-along hooks/refs.
   const practiceBody = (
     <>
-      <HeadphoneTip />
+      <HeadphoneTip show={showHeadphoneTip} onDismiss={handleDismissHeadphoneTip} />
 
       {/* --- the sheet / take panel (design .sheet) wrapping OSMD ----------- */}
       <section className="staff-area">
@@ -536,26 +587,27 @@ export function App(): React.JSX.Element {
         </span>
       </div>
 
-      <ConfigPanel config={uiConfig} disabled={isRunning} onChange={setUiConfig} />
+      <ConfigPanel config={uiConfig} disabled={isRunning} onChange={handleConfigChange} />
 
       {/* --- Dev tools drawer: synthetic-take harness + detector picker +
               device picker + detected count. Collapsed by default, kept fully
               functional but visually de-emphasised. --------------------------- */}
-      <section className="dev-tools" data-open={devToolsOpen ? 'true' : 'false'}>
+      {devDrawerVisible && (
+      <section className="dev-tools" data-open={devDrawerExpanded ? 'true' : 'false'}>
         <button
           type="button"
           className="dev-tools-toggle"
-          aria-expanded={devToolsOpen}
-          onClick={() => setDevToolsOpen((o) => !o)}
+          aria-expanded={devDrawerExpanded}
+          onClick={() => setDevDrawerExpanded((o) => !o)}
         >
-          <span className="dev-tools-caret">{devToolsOpen ? '▾' : '▸'}</span>
+          <span className="dev-tools-caret">{devDrawerExpanded ? '▾' : '▸'}</span>
           Dev tools
           <span className="dev-tools-hint">
             synthetic take · detector · input device
           </span>
         </button>
 
-        {devToolsOpen && (
+        {devDrawerExpanded && (
           <div className="dev-tools-body">
             <div className="synthetic-harness">
               <span
@@ -641,6 +693,7 @@ export function App(): React.JSX.Element {
           </div>
         )}
       </section>
+      )}
 
       {showResults && line && result && (
         <ResultsScreen
@@ -677,7 +730,7 @@ export function App(): React.JSX.Element {
           <div className="stage z onboarding-stage">
             <OnboardingView
               config={uiConfig}
-              onChange={setUiConfig}
+              onChange={handleConfigChange}
               inputDeviceId={inputDeviceId}
               onDeviceChange={setInputDeviceId}
               onStart={handleFinishOnboarding}
@@ -708,6 +761,13 @@ export function App(): React.JSX.Element {
                 >
                   Stats
                 </button>
+                <button
+                  className={'btn btn-small' + (view === 'settings' ? ' is-active' : '')}
+                  onClick={() => setView('settings')}
+                  aria-pressed={view === 'settings'}
+                >
+                  Settings
+                </button>
               </nav>
               <span className="meta">
                 {view === 'practice'
@@ -728,6 +788,23 @@ export function App(): React.JSX.Element {
             {view === 'stats' && (
               <div className="stage z">
                 <StatsView />
+              </div>
+            )}
+            {view === 'settings' && (
+              <div className="stage z">
+                <SettingsView
+                  config={uiConfig}
+                  onConfigChange={handleConfigChange}
+                  inputDeviceId={inputDeviceId}
+                  onDeviceChange={setInputDeviceId}
+                  detectorKind={detectorKind}
+                  onDetectorChange={handleDetectorChange}
+                  devDrawerVisible={devDrawerVisible}
+                  onDevDrawerToggle={handleDevDrawerToggle}
+                  onResetHeadphoneTip={handleResetHeadphoneTip}
+                  isRunning={isRunning}
+                  active={view === 'settings'}
+                />
               </div>
             )}
           </>

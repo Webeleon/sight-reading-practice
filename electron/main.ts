@@ -41,6 +41,14 @@ interface AppConfig {
   detector?: 'pitchy' | 'crepe';
   /** Whether the first-run onboarding/setup screen has been completed. */
   onboardingComplete?: boolean;
+  /** Last-used practice config (key/position/bars/tempo), persisted so the app
+   *  reopens on the settings last practiced with. */
+  tempo?: number;
+  keyIndex?: number;
+  positionIndex?: number;
+  barCount?: number;
+  /** Whether the in-app dev-tools drawer is shown in the practice view. */
+  devDrawerVisible?: boolean;
 }
 
 function configPath(): string {
@@ -169,6 +177,10 @@ function closeDb(): void {
 // In a packaged/prod build it is undefined and we load the built HTML from disk.
 const RENDERER_DEV_URL = process.env['ELECTRON_RENDERER_URL'];
 
+/** The live main window, so the DevTools IPC handlers can reach its webContents
+ *  even though `win` is local to createWindow(). Cleared when the window closes. */
+let mainWindow: BrowserWindow | null = null;
+
 function createWindow(): void {
   const win = new BrowserWindow({
     width: 1280,
@@ -185,6 +197,21 @@ function createWindow(): void {
     },
   });
 
+  mainWindow = win;
+  win.on('closed', () => {
+    if (mainWindow === win) mainWindow = null;
+  });
+
+  // Keep the Settings DevTools toggle honest when the inspector is opened/closed
+  // by other means (the inspector's own close button, the F12/Cmd+Opt+I shortcut,
+  // or the dev auto-open below): push the live state to the renderer.
+  win.webContents.on('devtools-opened', () => {
+    win.webContents.send('devtools:changed', true);
+  });
+  win.webContents.on('devtools-closed', () => {
+    win.webContents.send('devtools:changed', false);
+  });
+
   win.once('ready-to-show', () => {
     win.show();
   });
@@ -198,6 +225,27 @@ function createWindow(): void {
     console.log(`[MAIN] loading built renderer: ${indexHtml}`);
     void win.loadFile(indexHtml);
   }
+}
+
+/** Chromium DevTools (inspector) control for the Settings "Developer" section.
+ *  The renderer cannot open its own inspector under contextIsolation, so it asks
+ *  the main process here. State changes are also pushed via 'devtools:changed'
+ *  (wired in createWindow) so the Settings toggle reflects the live state. */
+function registerDevtoolsIpc(): void {
+  const webContents = (): Electron.WebContents | undefined =>
+    (mainWindow ?? BrowserWindow.getAllWindows()[0])?.webContents;
+
+  ipcMain.handle('devtools:isOpen', (): boolean => {
+    return webContents()?.isDevToolsOpened() ?? false;
+  });
+
+  ipcMain.handle('devtools:toggle', (): { open: boolean } => {
+    const wc = webContents();
+    if (!wc) return { open: false };
+    if (wc.isDevToolsOpened()) wc.closeDevTools();
+    else wc.openDevTools({ mode: 'right' });
+    return { open: wc.isDevToolsOpened() };
+  });
 }
 
 /** A tiny DB-availability IPC so the renderer can show whether saving is on. */
@@ -462,6 +510,7 @@ function registerPresetIpc(): void {
 void app.whenReady().then(() => {
   console.log('[MAIN] app ready; creating window');
   registerConfigIpc();
+  registerDevtoolsIpc();
   registerDbIpc();
   registerStatsIpc();
   registerSessionIpc();

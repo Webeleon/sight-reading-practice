@@ -3,37 +3,30 @@
 // Disposable UI layer. The brief's section-18 default is to NOT attempt output-
 // routing detection and instead always show a soft, dismissible tip that
 // headphones improve detection (playing through speakers lets the metronome/
-// playback bleed into the mic and pollute pitch detection). Dismissal is
-// persisted so it only shows once.
+// playback bleed into the mic and pollute pitch detection).
 //
-// PRESENTATION ONLY: matches the Signal Tape advisory tip from design/app.html
-// screen 01 (the dashed .onb .tip row with a headphone glyph). Behaviour is
-// unchanged — same show / dismiss / persistence. Uses the existing .headphone-tip
-// styles.css class (dashed advisory); the glyph + layout are local markup.
+// CONTROLLED: visibility + dismissal are owned by App (hydrated from the
+// `headphoneTipDismissed` config flag and persisted there), so the Settings
+// "re-show headphone tip" reset can bring it back immediately within the session
+// rather than only on the next launch. This component is now pure presentation.
+//
+// PRESENTATION: matches the Signal Tape advisory tip from design/app.html screen
+// 01 (the dashed .onb .tip row with a headphone glyph). Uses the existing
+// .headphone-tip styles.css class (dashed advisory); the glyph + layout are local.
 
-import React, { useCallback, useEffect, useState } from 'react';
-import { getAppConfig, setAppConfig } from '../appConfig.js';
+import React from 'react';
 
-export function HeadphoneTip(): React.JSX.Element | null {
-  const [show, setShow] = useState(false);
+export interface HeadphoneTipProps {
+  /** Whether the tip is currently shown (App owns this, hydrated from config). */
+  show: boolean;
+  /** Dismiss the tip (App hides it + persists headphoneTipDismissed). */
+  onDismiss: () => void;
+}
 
-  useEffect(() => {
-    let cancelled = false;
-    void (async () => {
-      const cfg = await getAppConfig();
-      if (!cancelled) setShow(!cfg.headphoneTipDismissed);
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
-  const dismiss = useCallback((): void => {
-    setShow(false);
-    void setAppConfig({ headphoneTipDismissed: true });
-    console.log('[UI] headphone tip dismissed (persisted)');
-  }, []);
-
+export function HeadphoneTip({
+  show,
+  onDismiss,
+}: HeadphoneTipProps): React.JSX.Element | null {
   if (!show) return null;
 
   return (
@@ -48,7 +41,7 @@ export function HeadphoneTip(): React.JSX.Element | null {
           detection — it keeps your scores honest.
         </span>
       </span>
-      <button type="button" className="btn btn-small" onClick={dismiss}>
+      <button type="button" className="btn btn-small" onClick={onDismiss}>
         Got it
       </button>
     </div>
